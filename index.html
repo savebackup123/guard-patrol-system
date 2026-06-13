@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>ระบบจัดการยาม MDF Security</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    :root {
+      --bg:        #0d0f14;
+      --surface:   #161a23;
+      --surface2:  #1e2433;
+      --border:    #2a3040;
+      --accent:    #4f9eff;
+      --accent2:   #7ec8a0;
+      --accent3:   #a855f7; 
+      --warn:      #f5a623;
+      --danger:    #e05c5c;
+      --text:      #e8edf5;
+      --text-muted:#7a8499;
+      --radius:    14px;
+      --font:      'IBM Plex Sans Thai', sans-serif;
+      --mono:      'IBM Plex Mono', monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font); background: var(--bg); color: var(--text);
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 0 0 40px;
+    }
+    .header { width: 100%; background: var(--surface); border-bottom: 1px solid var(--border); padding: 18px 20px 14px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; }
+    .header-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent2), #206b43); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #fff; }
+    .header-title { font-size: 15px; font-weight: 600; }
+    .header-sub { font-size: 11px; color: var(--text-muted); font-family: var(--mono); margin-top: 1px; }
+    .role-badge { background: var(--warn); color: #000; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-left: auto; display: none; }
+    
+    .status-bar { width: 100%; max-width: 420px; margin: 20px 20px 0; padding: 12px 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .booking-bar { width: 100%; max-width: 420px; margin: 12px 20px 0; padding: 12px 16px; background: rgba(79, 158, 255, 0.08); border: 1px dashed rgba(79, 158, 255, 0.4); border-radius: var(--radius); display: none; align-items: center; gap: 12px; font-size: 14px; color: var(--text); }
+    .booking-highlight { color: var(--accent); font-weight: 700; font-size: 15px; }
+
+    .container { width: 100%; max-width: 420px; padding: 0 16px; margin-top: 16px; }
+    .section { display: none; animation: fadeUp 0.25s ease; }
+    .section.active { display: block; }
+    @keyframes fadeUp { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: translateY(0); } }
+    
+    .section-title { font-size: 13px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .section-title::before { content: ''; display: block; width: 3px; height: 14px; border-radius: 2px; background: var(--accent); }
+    
+    .menu-grid { display: flex; flex-direction: column; gap: 10px; }
+    .menu-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: 0.2s; }
+    .menu-card:active { transform: scale(0.98); }
+    .menu-card:hover { background: var(--surface2); }
+    .menu-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+    .menu-info { flex: 1; }
+    .menu-label { font-size: 15px; font-weight: 600; }
+    .menu-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    input, select { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text); font-family: var(--font); font-size: 14px; outline: none; margin-bottom: 14px; }
+    .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-family: var(--font); font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-success { background: var(--accent2); color: #0d1a12; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    
+    /* Taskpool Styles */
+    .task-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; border-left: 4px solid var(--border); }
+    .task-card.active { border-left-color: var(--warn); background: rgba(245, 166, 35, 0.05); }
+    .task-card.completed { border-left-color: var(--accent2); opacity: 0.8; }
+    .task-card.missed { border-left-color: var(--danger); opacity: 0.6; }
+    .task-time { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .task-name { font-size: 15px; font-weight: 600; margin: 4px 0 10px; }
+    .task-status { font-size: 12px; font-weight: bold; }
+    .task-imgs { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; padding-bottom: 4px; }
+    .task-imgs img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; }
+    .upload-btn { background: rgba(79,158,255,0.1); color: var(--accent); border: 1px dashed var(--accent); border-radius: 8px; padding: 10px; text-align: center; font-size: 13px; font-weight: bold; cursor: pointer; }
+
+    /* 14 Days Schedule Styles */
+    .schedule-day-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
+    .schedule-day-header { background: var(--surface2); padding: 12px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--border); }
+    .schedule-day-header.is-today { background: rgba(168, 85, 247, 0.15); color: var(--accent3); }
+    .schedule-room-item { display: flex; align-items: flex-start; padding: 10px 16px; border-bottom: 1px dashed var(--border); }
+    .room-badge { font-family: var(--mono); font-size: 12px; font-weight: 600; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 6px; margin-right: 12px; min-width: 45px; text-align: center; }
+    .room-details { flex: 1; font-size: 13px; }
+    .status-checkin .room-badge { color: var(--accent2); }
+    .status-stay .room-badge { color: var(--warn); }
+    .status-checkout .room-badge { color: var(--danger); }
+    .empty-day-msg { font-size: 13px; color: var(--text-muted); padding: 12px 0; text-align: center; font-style: italic; }
+
+    /* Summary Dashboard */
+    .summary-box { background: var(--surface2); border-radius: 10px; padding: 16px; display: flex; justify-content: space-around; border: 1px solid var(--border); margin-bottom: 20px; }
+    .summary-item { text-align: center; }
+    .summary-val { font-size: 24px; font-weight: 700; }
+    .summary-label { font-size: 11px; color: var(--text-muted); }
+
+    /* UI Overlays */
+    .loading-overlay { display: none; position: fixed; inset: 0; background: rgba(13,15,20,0.85); z-index: 999; flex-direction: column; align-items: center; justify-content: center; }
+    .loading-overlay.active { display: flex; }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--surface2); border: 1px solid var(--border); border-radius: 16px; padding: 14px 20px; font-size: 14px; text-align: center; opacity: 0; transition: 0.3s; z-index: 1000; width: 90vw; max-width: 400px; color: var(--accent2); }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.error { color: var(--danger); border-color: var(--danger); }
+  </style>
+</head>
+<body>
+
+  <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+  <div class="toast" id="toast"></div>
+
+  <div class="header">
+    <div class="header-icon">🛡️</div>
+    <div class="header-text">
+      <div class="header-title">MDF Security Portal</div>
+      <div class="header-sub" id="headerSub">กำลังเชื่อมต่อ...</div>
+    </div>
+    <div class="role-badge" id="roleBadge">OBSERVER</div>
+  </div>
+
+  <div class="status-bar" id="gpsStatus">📍 ค้นหาตำแหน่งพิกัดของคุณ...</div>
+  
+  <div class="booking-bar" id="bookingBar">
+    <div class="booking-icon">🏡</div>
+    <div class="booking-text" id="bookingText">กำลังตรวจสอบ...</div>
+  </div>
+
+  <div class="container">
+    
+    <!-- หน้าลงทะเบียน -->
+    <div id="regSec" class="section">
+      <div class="section-title">ลงทะเบียนเจ้าหน้าที่รักษาความปลอดภัย</div>
+      <input type="text" id="regName" placeholder="ชื่อจริง-นามสกุล">
+      <input type="text" id="regNick" placeholder="ชื่อเล่น">
+      <button class="btn btn-primary" onclick="submitRegistration()">ยืนยันการลงทะเบียน</button>
+    </div>
+
+    <!-- เมนูหลัก -->
+    <div id="mainMenu" class="section">
+      <div class="menu-grid">
+        <div class="menu-card green" onclick="showSection('checkinSec')">
+          <div class="menu-icon" style="background:rgba(126,200,160,0.12)">📸</div>
+          <div class="menu-info">
+            <div class="menu-label">ตอกบัตร รับ-ส่งกะ</div>
+            <div class="menu-desc">บันทึกเวลาปฏิบัติงานประจำวัน</div>
+          </div>
+        </div>
+        <div class="menu-card orange" onclick="openTaskpool()">
+          <div class="menu-icon" style="background:rgba(245,166,35,0.12)">🔦</div>
+          <div class="menu-info">
+            <div class="menu-label">ภารกิจเดินตรวจตรา (Taskpool)</div>
+            <div class="menu-desc">ตารางการเดินเช็กความปลอดภัย (ทุก 1 ชม.)</div>
+          </div>
+        </div>
+        <div class="menu-card purple" onclick="openSchedule()">
+          <div class="menu-icon" style="background:rgba(168,85,247,0.12)">🗓️</div>
+          <div class="menu-info">
+            <div class="menu-label">ตารางห้องพัก (14 วัน)</div>
+            <div class="menu-desc">ข้อมูลคิวบ้านพักวิลล่า</div>
+          </div>
+        </div>
+        <div class="menu-card blue" onclick="openDashboard()">
+          <div class="menu-icon" style="background:rgba(79,158,255,0.12)">📊</div>
+          <div class="menu-info">
+            <div class="menu-label">กระดานตรวจสอบ (Dashboard)</div>
+            <div class="menu-desc">เช็กสถานะการส่งงานของยามในกะ</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- หน้า Check-in/out -->
+    <div id="checkinSec" class="section">
+      <div class="section-title">ตอกบัตรประจำกะ</div>
+      <div class="btn-row">
+        <button class="btn btn-success" onclick="submitCheckIn('เข้างาน')">เข้างาน ✅</button>
+        <button class="btn btn-danger" onclick="submitCheckIn('ออกงาน')">ออกงาน 🔴</button>
+      </div>
+      <button class="btn btn-ghost" onclick="showSection('mainMenu')">← ย้อนกลับ</button>
+    </div>
+
+    <!-- หน้า 14 Days Schedule -->
+    <div id="scheduleSec" class="section">
+      <div class="section-title">ตารางห้องพักล่วงหน้า 14 วัน</div>
+      <div id="scheduleListContainer"></div>
+      <button class="btn btn-ghost" style="margin-top:16px" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
+    </div>
+
+    <!-- หน้า Taskpool -->
+    <div id="taskpoolSec" class="section">
+      <div class="section-title">ตารางภารกิจประจำกะ</div>
+      <div id="taskList"></div>
+      <button class="btn btn-ghost" style="margin-top:16px" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
+    </div>
+
+    <!-- หน้า Dashboard -->
+    <div id="dashboardSec" class="section">
+      <div class="section-title">ผลการปฏิบัติงานกะปัจจุบัน</div>
+      <div class="summary-box">
+        <div class="summary-item"><div class="summary-val" id="dashOk" style="color:var(--accent2)">0</div><div class="summary-label">ตรวจสำเร็จ</div></div>
+        <div class="summary-item"><div class="summary-val" id="dashNo" style="color:var(--danger)">0</div><div class="summary-label">ละทิ้งหน้าที่</div></div>
+      </div>
+      <button class="btn btn-ghost" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
+    </div>
+
+  </div>
+
+  <script>
+    var GAS_URL = "ใส่_URL_WEB_APP_ตรงนี้"; 
+    var userProfile = { userId: "U_Mock", displayName: "Test", fullName: "", nickname: "", role: "" };
+    var currentLoc = null;
+
+    async function init() {
+      try {
+        await liff.init({ liffId: "ใส่_LIFF_ID_ตรงนี้" });
+        if (!liff.isLoggedIn()) return liff.login();
+        var p = await liff.getProfile();
+        userProfile.userId = p.userId;
+        userProfile.displayName = p.displayName;
+        document.getElementById('headerSub').textContent = p.displayName;
+        
+        getGPS();
+        checkRegistration();
+      } catch (e) {
+        showToast("LIFF Error: โหมดทดสอบ", "error");
+        getGPS(); checkRegistration(); // Fallback for browser test
+      }
+    }
+
+    function getGPS() {
+      if(navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => { currentLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude }; document.getElementById('gpsStatus').innerHTML = "📍 รับพิกัดสำเร็จ ("+currentLoc.lat.toFixed(4)+")"; fetchBookingStatus(); },
+          err => { document.getElementById('gpsStatus').innerHTML = "❌ ไม่สามารถรับ GPS ได้ กรุณาเปิด Location"; fetchBookingStatus(); }
+        );
+      }
+    }
+
+    function apiCall(payload) {
+      showLoading();
+      return fetch(GAS_URL, { method: "POST", body: JSON.stringify(payload) })
+        .then(r => r.json())
+        .finally(() => hideLoading());
+    }
+
+    // -- Flow ทั่วไป --
+    function checkRegistration() {
+      apiCall({ type: 'register', userId: userProfile.userId, displayName: userProfile.displayName }).then(res => {
+        if (res.isRegistered) {
+          userProfile.role = res.role;
+          userProfile.fullName = res.fullName;
+          userProfile.nickname = res.nickname;
+          if(res.role === "Observer") document.getElementById('roleBadge').style.display = "block";
+          showSection('mainMenu');
+        } else {
+          showSection('regSec');
+        }
+      });
+    }
+
+    function submitRegistration() {
+      var n = document.getElementById('regName').value;
+      var nk = document.getElementById('regNick').value;
+      if(!n || !nk) return showToast("กรอกข้อมูลให้ครบ", "error");
+      apiCall({ type: 'register', userId: userProfile.userId, displayName: userProfile.displayName, fullName: n, nickname: nk }).then(res => {
+        userProfile.role = res.role; userProfile.fullName = n; userProfile.nickname = nk;
+        if(res.role === "Observer") document.getElementById('roleBadge').style.display = "block";
+        showSection('mainMenu');
+        showToast("ลงทะเบียนสำเร็จ");
+      });
+    }
+
+    function submitCheckIn(action) {
+      if(!currentLoc && userProfile.role !== "Observer") return showToast("รอ GPS สักครู่", "error");
+      apiCall({ type: 'checkin_out', action: action, lat: currentLoc?.lat, lng: currentLoc?.lng, fullName: userProfile.fullName, role: userProfile.role }).then(res => {
+        showToast(res.message, res.success ? "success" : "error");
+      });
+    }
+
+    // -- Booking & Schedule --
+    function fetchBookingStatus() {
+      fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'get_booking' }) })
+        .then(r => r.json()).then(res => {
+          if(res.success) {
+            document.getElementById('bookingBar').style.display = 'flex';
+            document.getElementById('bookingText').innerHTML = '<marquee scrollamount="4">' + res.message + '</marquee>';
+          }
+        });
+    }
+
+    function openSchedule() {
+      apiCall({ type: 'get_booking_14' }).then(res => {
+        if(res.success) {
+          var html = '';
+          res.data.forEach(d => {
+            html += `<div class="schedule-day-card"><div class="schedule-day-header ${d.rawDate === new Date().toISOString().split('T')[0] ? 'is-today' : ''}">🗓️ ${d.dateStr}</div>`;
+            if(d.rooms.length === 0) html += `<div class="empty-day-msg">วิลล่าว่าง</div>`;
+            else {
+              d.rooms.forEach(r => {
+                var st = r.status === 'checkin' ? 'รอเข้าพัก' : r.status === 'stay' ? 'พักต่อ' : 'จะเช็คเอาท์';
+                html += `<div class="schedule-room-item status-${r.status}"><div class="room-badge">${r.room}</div><div class="room-details"><span style="font-weight:bold">${st}</span> ${r.detail}</div></div>`;
+              });
+            }
+            html += `</div>`;
+          });
+          document.getElementById('scheduleListContainer').innerHTML = html;
+          showSection('scheduleSec');
+        }
+      });
+    }
+
+    // -- Taskpool Logic --
+    function openTaskpool() {
+      apiCall({ type: 'get_tasks' }).then(res => {
+        if(res.success) {
+          var html = '';
+          res.tasks.forEach(t => {
+            var sc = t.status === 'Active' ? 'active' : t.status === 'Completed' ? 'completed' : t.status === 'Missed' ? 'missed' : '';
+            var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : t.status === 'Missed' ? '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>' : '<span style="color:var(--text-muted)">🔒 ยังไม่ถึงเวลา</span>';
+            
+            var btn = t.status === 'Active' ? `<div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">📸 อัปโหลดรูปภาพภารกิจนี้ (หลายรูปได้)</div><input type="file" id="file_${t.rowIdx}" multiple accept="image/*" capture="environment" style="display:none" onchange="uploadTasks(this, ${t.rowIdx})">` : '';
+            var imgs = t.images && t.images.length ? `<div class="task-imgs">${t.images.map(url => `<img src="${url}" onclick="window.open('${url.replace('s200','s1600')}')">`).join('')}</div>` : '';
+
+            html += `<div class="task-card ${sc}">
+              <div class="task-time">⏰ ${t.timeLabel}</div>
+              <div class="task-name">${t.taskName}</div>
+              <div class="task-status">${st}</div>
+              ${imgs}
+              <div style="margin-top:10px">${btn}</div>
+            </div>`;
+          });
+          document.getElementById('taskList').innerHTML = html;
+          showSection('taskpoolSec');
+        }
+      });
+    }
+
+    function uploadTasks(input, rowIdx) {
+      if(!input.files.length) return;
+      if(!currentLoc && userProfile.role !== "Observer") return showToast("รอ GPS ก่อนส่ง", "error");
+      
+      showLoading("กำลังอัปโหลด...");
+      var files = Array.from(input.files);
+      var b64Arr = [];
+      var loaded = 0;
+      
+      files.forEach(f => {
+        var r = new FileReader();
+        r.onload = e => {
+          b64Arr.push(e.target.result);
+          loaded++;
+          if(loaded === files.length) {
+            apiCall({ type: 'submit_task', rowIdx: rowIdx, lat: currentLoc?.lat, lng: currentLoc?.lng, images: b64Arr, fullName: userProfile.fullName, role: userProfile.role })
+              .then(res => { showToast(res.message, res.success ? "success" : "error"); if(res.success) openTaskpool(); });
+          }
+        }
+        r.readAsDataURL(f);
+      });
+    }
+
+    function openDashboard() {
+      apiCall({ type: 'get_dashboard' }).then(res => {
+        if(res.success) {
+          document.getElementById('dashOk').innerText = res.completed;
+          document.getElementById('dashNo').innerText = res.missed;
+          showSection('dashboardSec');
+        }
+      });
+    }
+
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(e => e.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+    function showLoading(t="รอสักครู่") { document.getElementById('loadingOverlay').classList.add('active'); }
+    function hideLoading() { document.getElementById('loadingOverlay').classList.remove('active'); }
+    function showToast(msg, type="success") {
+      var t = document.getElementById('toast');
+      t.innerText = msg; t.className = `toast ${type} show`;
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
