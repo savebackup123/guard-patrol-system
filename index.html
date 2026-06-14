@@ -198,13 +198,23 @@
       <button class="btn btn-ghost" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
     </div>
 
-    <!-- หน้าบันทึกรถบริการ -->
+    <!-- หน้าบันทึกและค้นหารถบริการ -->
     <div id="vehicleSec" class="section">
       <div class="section-title">🚙 บันทึกรถเข้า-ออกพื้นที่</div>
       <input type="text" id="vehPlate" placeholder="ทะเบียนรถ (เช่น สฮ 6446 กทม)">
       <input type="text" id="vehPurpose" placeholder="รายละเอียด (ใคร / มาทำอะไร / บ้านไหน)">
       <button class="btn btn-primary" onclick="submitVehicle()">บันทึกข้อมูลรถ</button>
-      <button class="btn btn-ghost" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
+
+      <hr style="border: 0; border-top: 1px dashed var(--border); margin: 24px 0 16px;">
+
+      <div class="section-title">🔍 ค้นหาประวัติรถเข้า-ออก</div>
+      <input type="text" id="searchPlate" placeholder="พิมพ์เลขทะเบียนเพื่อค้นหา (เช่น 6446)">
+      <button class="btn btn-success" onclick="searchVehicle()">ค้นหาประวัติ</button>
+      
+      <!-- พื้นที่แสดงผลการค้นหา -->
+      <div id="vehicleSearchResult" style="margin-top: 14px;"></div>
+
+      <button class="btn btn-ghost" style="margin-top:20px;" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
     </div>
 
   </div>
@@ -383,6 +393,30 @@
       showLoading("กำลังบันทึก...");
       apiCall({ type: 'submit_vehicle', plate: plate, purpose: purpose, fullName: userProfile.fullName })
         .then(res => { showToast(res.message, res.success ? "success" : "error"); if(res.success) { document.getElementById('vehPlate').value = ''; document.getElementById('vehPurpose').value = ''; showSection('mainMenu'); } });
+    }
+    function searchVehicle() {
+      var plate = document.getElementById('searchPlate').value;
+      if(!plate) return showToast("กรุณาระบุทะเบียนรถที่ต้องการค้นหา", "error");
+      showLoading("กำลังค้นหา...");
+      apiCall({ type: 'search_vehicle', plate: plate })
+        .then(res => {
+          if(res.success) {
+            var html = '';
+            if(res.data.length === 0) {
+              html = '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:10px;">ไม่พบประวัติรถคันนี้ในระบบ</div>';
+            } else {
+              res.data.forEach(d => {
+                html += `<div style="background:var(--surface2); border:1px solid var(--border); border-left:4px solid var(--accent); padding:12px; border-radius:8px; margin-bottom:8px; font-size:13px; text-align:left;">
+                  <div style="color:var(--accent); font-weight:bold; margin-bottom:4px; font-size:12px;">📅 ${d.time}</div>
+                  <div>🚙 <b>ทะเบียน:</b> ${d.plate}</div>
+                  <div style="margin-top:4px;">📝 <b>รายละเอียด:</b> ${d.purpose}</div>
+                  <div style="color:var(--text-muted); font-size:11px; margin-top:8px;">👮 บันทึกโดย: ${d.guard}</div>
+                </div>`;
+              });
+            }
+            document.getElementById('vehicleSearchResult').innerHTML = html;
+          } else showToast(res.message, "error");
+        });
     }
 
     function showSection(id) { document.querySelectorAll('.section').forEach(e => e.classList.remove('active')); document.getElementById(id).classList.add('active'); }
