@@ -140,6 +140,15 @@
           <div class="menu-icon" style="background:rgba(79,158,255,0.12)">📊</div>
           <div class="menu-info"><div class="menu-label">กระดานตรวจสอบ (Dashboard)</div><div class="menu-desc">เช็กสถานะการส่งงานของยามในกะ</div></div>
         </div>
+        <!-- วางต่อท้ายปุ่มกระดานตรวจสอบ (สีฟ้า) -->
+        <div class="menu-card" style="background: rgba(224,92,92,0.05); border-color: rgba(224,92,92,0.2);" onclick="showSection('issueSec')">
+          <div class="menu-icon" style="background: rgba(224,92,92,0.12)">🚨</div>
+          <div class="menu-info"><div class="menu-label" style="color: var(--danger)">แจ้งปัญหา/เหตุฉุกเฉิน</div><div class="menu-desc">รายงานเหตุผิดปกติ พร้อมแนบรูป</div></div>
+        </div>
+        <div class="menu-card" style="background: rgba(122,132,153,0.05); border-color: rgba(122,132,153,0.2);" onclick="showSection('vehicleSec')">
+          <div class="menu-icon" style="background: rgba(122,132,153,0.12)">🚙</div>
+          <div class="menu-info"><div class="menu-label">บันทึกรถเข้า-ออกพื้นที่</div><div class="menu-desc">จดทะเบียนรถบริการ/ผู้มาติดต่อ</div></div>
+        </div>
       </div>
     </div>
 
@@ -175,6 +184,26 @@
         <div class="summary-item"><div class="summary-val" id="dashOk" style="color:var(--accent2)">0</div><div class="summary-label">ตรวจสำเร็จ</div></div>
         <div class="summary-item"><div class="summary-val" id="dashNo" style="color:var(--danger)">0</div><div class="summary-label">ละทิ้งหน้าที่</div></div>
       </div>
+      <button class="btn btn-ghost" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
+    </div>
+
+    <!-- หน้าแจ้งปัญหาฉุกเฉิน -->
+    <div id="issueSec" class="section">
+      <div class="section-title">🚨 แจ้งปัญหา/เหตุฉุกเฉิน</div>
+      <textarea id="issueText" placeholder="ระบุรายละเอียดปัญหาที่พบ..." rows="3" style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-family:var(--font); font-size:14px; outline:none; margin-bottom:14px; resize:none;"></textarea>
+      <div class="upload-btn" onclick="document.getElementById('issueFile').click()">📸 อัปโหลดรูปภาพประกอบ (บังคับ)</div>
+      <input type="file" id="issueFile" accept="image/*" capture="environment" style="display:none" onchange="previewIssueImg(this)">
+      <div id="issueImgPreview" style="margin-top:10px; text-align:center;"></div>
+      <button class="btn btn-danger" onclick="submitIssue()">ส่งรายงานฉุกเฉิน</button>
+      <button class="btn btn-ghost" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
+    </div>
+
+    <!-- หน้าบันทึกรถบริการ -->
+    <div id="vehicleSec" class="section">
+      <div class="section-title">🚙 บันทึกรถเข้า-ออกพื้นที่</div>
+      <input type="text" id="vehPlate" placeholder="ทะเบียนรถ (เช่น สฮ 6446 กทม)">
+      <input type="text" id="vehPurpose" placeholder="รายละเอียด (ใคร / มาทำอะไร / บ้านไหน)">
+      <button class="btn btn-primary" onclick="submitVehicle()">บันทึกข้อมูลรถ</button>
       <button class="btn btn-ghost" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
     </div>
 
@@ -324,6 +353,36 @@
       apiCall({ type: 'get_dashboard' }).then(res => {
         if(res.success) { document.getElementById('dashOk').innerText = res.completed; document.getElementById('dashNo').innerText = res.missed; showSection('dashboardSec'); }
       });
+    }
+    function previewIssueImg(input) {
+      if(input.files && input.files[0]) {
+        var r = new FileReader();
+        r.onload = function(e) { document.getElementById('issueImgPreview').innerHTML = '<img src="'+e.target.result+'" style="max-width:100%; border-radius:8px; border:1px solid var(--border);">'; }
+        r.readAsDataURL(input.files[0]);
+      }
+    }
+
+    function submitIssue() {
+      var txt = document.getElementById('issueText').value;
+      var fileInput = document.getElementById('issueFile');
+      if(!txt || !fileInput.files.length) return showToast("กรุณาระบุรายละเอียดและแนบรูปภาพ", "error");
+      if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนส่ง", "error");
+      showLoading("กำลังส่งรายงาน...");
+      var r = new FileReader();
+      r.onload = e => {
+        apiCall({ type: 'submit_issue', text: txt, image: e.target.result, lat: currentLoc?.lat, lng: currentLoc?.lng, fullName: userProfile.fullName, role: userProfile.role })
+          .then(res => { showToast(res.message, res.success ? "success" : "error"); if(res.success) { document.getElementById('issueText').value = ''; document.getElementById('issueImgPreview').innerHTML = ''; showSection('mainMenu'); } });
+      };
+      r.readAsDataURL(fileInput.files[0]);
+    }
+
+    function submitVehicle() {
+      var plate = document.getElementById('vehPlate').value;
+      var purpose = document.getElementById('vehPurpose').value;
+      if(!plate || !purpose) return showToast("กรุณากรอกข้อมูลให้ครบถ้วน", "error");
+      showLoading("กำลังบันทึก...");
+      apiCall({ type: 'submit_vehicle', plate: plate, purpose: purpose, fullName: userProfile.fullName })
+        .then(res => { showToast(res.message, res.success ? "success" : "error"); if(res.success) { document.getElementById('vehPlate').value = ''; document.getElementById('vehPurpose').value = ''; showSection('mainMenu'); } });
     }
 
     function showSection(id) { document.querySelectorAll('.section').forEach(e => e.classList.remove('active')); document.getElementById(id).classList.add('active'); }
