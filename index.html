@@ -213,7 +213,7 @@
 
     async function init() {
       try {
-        await liff.init({ liffId: "ใส่_LIFF_ID_ตรงนี้" });
+        await liff.init({ liffId: "https://liff.line.me/2010387823-I2Kotz77" });
         if (!liff.isLoggedIn()) return liff.login();
         var p = await liff.getProfile();
         userProfile.userId = p.userId;
