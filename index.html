@@ -182,7 +182,12 @@
 
     <!-- หน้า 14 Days Schedule -->
     <div id="scheduleSec" class="section">
-      <div class="section-title">ตารางห้องพักล่วงหน้า 14 วัน</div>
+      <div class="section-title">ตารางห้องพัก</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-ghost" id="rangeBtn0" style="flex:1;padding:8px;font-size:13px" onclick="loadSchedule(0,6)">ล่วงหน้า 7 วัน</button>
+        <button class="btn btn-ghost" id="rangeBtn1" style="flex:1;padding:8px;font-size:13px" onclick="loadSchedule(7,6)">วันนี้ ±7 วัน</button>
+        <button class="btn btn-ghost" id="rangeBtn2" style="flex:1;padding:8px;font-size:13px" onclick="loadSchedule(13,0)">ย้อนหลัง 14 วัน</button>
+      </div>
       <div id="scheduleListContainer"></div>
       <button class="btn btn-ghost" style="margin-top:16px" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
     </div>
@@ -289,23 +294,44 @@
         });
     }
 
-    function openSchedule() {
-      apiCall({ type: 'get_booking_14' }).then(res => {
+    // เปิดหน้าตาราง → โหลด default: วันนี้ + ล่วงหน้า 6 วัน
+    function openSchedule() { loadSchedule(0, 6); }
+
+    function loadSchedule(daysBack, daysForward) {
+      // highlight ปุ่มที่กด
+      var btns = [document.getElementById('rangeBtn0'), document.getElementById('rangeBtn1'), document.getElementById('rangeBtn2')];
+      btns.forEach(b => { if(b) b.style.borderColor = 'var(--border)'; b && (b.style.color = 'var(--text-muted)'); });
+      var idx = (daysBack===0&&daysForward===6) ? 0 : (daysBack===7&&daysForward===6) ? 1 : 2;
+      if(btns[idx]) { btns[idx].style.borderColor = 'var(--accent3)'; btns[idx].style.color = 'var(--accent3)'; }
+
+      document.getElementById('scheduleListContainer').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">กำลังโหลด...</div>';
+      showSection('scheduleSec');
+
+      apiCall({ type: 'get_booking_14', daysBack: daysBack, daysForward: daysForward }).then(res => {
         if(res.success) {
           var html = '';
           res.data.forEach(d => {
-            html += `<div class="schedule-day-card"><div class="schedule-day-header ${d.rawDate === new Date().toISOString().split('T')[0] ? 'is-today' : ''}">🗓️ ${d.dateStr}</div>`;
-            if(d.rooms.length === 0) html += `<div class="empty-day-msg">วิลล่าว่าง</div>`;
-            else {
+            var headerClass = d.isToday ? 'is-today' : '';
+            var todayBadge  = d.isToday ? ' <span style="font-size:11px;background:var(--accent3);color:#fff;padding:2px 6px;border-radius:4px;margin-left:6px">วันนี้</span>' : '';
+            var pastStyle   = d.isPast  ? 'opacity:0.6' : '';
+            html += `<div class="schedule-day-card" style="${pastStyle}">
+              <div class="schedule-day-header ${headerClass}">🗓️ ${d.dateStr}${todayBadge}</div>`;
+            if(d.rooms.length === 0) {
+              html += `<div class="empty-day-msg">วิลล่าว่าง ✓</div>`;
+            } else {
               d.rooms.forEach(r => {
-                var st = r.status === 'checkin' ? 'รอเข้าพัก' : r.status === 'stay' ? 'พักต่อ' : 'จะเช็คเอาท์';
-                html += `<div class="schedule-room-item status-${r.status}"><div class="room-badge">${r.room}</div><div class="room-details"><span style="font-weight:bold">${st}</span> ${r.detail}</div></div>`;
+                var stLabel = r.status === 'checkin' ? '🟢 เข้าพัก' : r.status === 'stay' ? '🟡 พักต่อ' : '🔴 เช็คเอาท์';
+                html += `<div class="schedule-room-item status-${r.status}">
+                  <div class="room-badge">${r.room}</div>
+                  <div class="room-details"><span style="font-weight:bold">${stLabel}</span><br><span style="color:var(--text-muted);font-size:12px">${r.detail}</span></div>
+                </div>`;
               });
             }
             html += `</div>`;
           });
           document.getElementById('scheduleListContainer').innerHTML = html;
-          showSection('scheduleSec');
+        } else {
+          document.getElementById('scheduleListContainer').innerHTML = `<div style="text-align:center;padding:20px;color:var(--danger)">${res.message || "โหลดไม่สำเร็จ"}</div>`;
         }
       });
     }
