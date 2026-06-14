@@ -330,7 +330,13 @@
           var html = '';
           res.tasks.forEach(t => {
             var sc = t.status === 'Active' ? 'active' : t.status === 'Completed' ? 'completed' : 'missed';
-            var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>';
+            
+            // เพิ่มการแสดงผลสีแดงเมื่อรูปมั่ว (Rejected)
+            var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : 
+                     t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : 
+                     t.status === 'Rejected' ? '<span style="color:var(--danger)">❌ รูปไม่ผ่าน (ทุจริต)</span>' : 
+                     '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>';
+            
             var btn = t.status === 'Active' ? `<div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">📸 อัปโหลดรูปภาพภารกิจนี้</div><input type="file" id="file_${t.rowIdx}" multiple accept="image/*" capture="environment" style="display:none" onchange="uploadTasks(this, ${t.rowIdx})">` : '';
             var imgs = t.images && t.images.length ? `<div class="task-imgs">${t.images.map(url => `<img src="${url}" onclick="window.open('${url.replace('s200','s1600')}')">`).join('')}</div>` : '';
             html += `<div class="task-card ${sc}"><div class="task-time">⏰ ${t.timeLabel}</div><div class="task-name">${t.taskName}</div><div class="task-status">${st}</div>${imgs}<div style="margin-top:10px">${btn}</div></div>`;
