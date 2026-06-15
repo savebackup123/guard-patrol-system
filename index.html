@@ -219,6 +219,9 @@
     var GAS_URL = "https://script.google.com/macros/s/AKfycbxtB_P4DDH_X2o88spkBpJaL4Kd-fF9yY8ifSEEC-uJ-91DngMVsjlhfUWnOva_q286kQ/exec"; 
     var userProfile = { userId: "U_Mock", displayName: "Test", fullName: "", nickname: "", role: "Guard" }; // ✅ กำหนดค่า Default เผื่อไว้
     var currentLoc = null;
+    var currentTasks = [];       // เพิ่มบรรทัดนี้
+    var stagedTaskImages = {};   // เพิ่มบรรทัดนี้
+    var currentIssueB64 = "";    // เพิ่มบรรทัดนี้เผื่อไว้สำหรับเมนูแจ้งเหตุ
 
     async function init() {
       try {
@@ -488,27 +491,74 @@
       });
     }
 
+    // พรีวิวภาพแจ้งเหตุ พร้อมสแกน EXIF และบีบอัดภาพ
     function previewIssueImg(input) {
-      if(input.files && input.files[0]) {
+      if(!input.files.length) return;
+      var file = input.files[0];
+      
+      showLoading("กำลังตรวจสอบเวลาภาพถ่าย...");
+      
+      EXIF.getData(file, function() {
+        var dateStr = EXIF.getTag(this, "DateTimeOriginal");
+        var takenDate;
+        var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        if (dateStr) {
+          var parts     = dateStr.split(' ');
+          var dateParts = parts[0].split(':');
+          var timeParts = parts[1].split(':');
+          takenDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]),
+                               parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2]));
+        } else {
+          if (isIOS) { takenDate = new Date(file.lastModified); } 
+          else { hideLoading(); showToast("ไม่อนุญาตให้ใช้รูปแคปหน้าจอ ถ่ายสดเท่านั้น ❌", "error"); input.value = ""; return; }
+        }
+
+        var diffMinutes  = Math.abs(new Date() - takenDate) / (1000 * 60);
+        if (diffMinutes > 5) {
+          hideLoading(); showToast("รูปภาพเก่าเกินไป (" + Math.floor(diffMinutes) + " นาทีที่แล้ว) ถ่ายใหม่ ❌", "error");
+          input.value = ""; return;
+        }
+
         var r = new FileReader();
-        r.onload = function(e) { document.getElementById('issueImgPreview').innerHTML = '<img src="'+e.target.result+'" style="max-width:100%; border-radius:8px; border:1px solid var(--border);">'; }
-        r.readAsDataURL(input.files[0]);
-      }
+        r.onload = function(e) {
+          var img = new Image();
+          img.onload = function() {
+            var MAX_W  = 800;
+            var scale  = Math.min(1, MAX_W / img.width);
+            var canvas = document.createElement('canvas');
+            canvas.width  = Math.round(img.width  * scale);
+            canvas.height = Math.round(img.height * scale);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            currentIssueB64 = canvas.toDataURL('image/jpeg', 0.72); // เก็บรูปที่บีบอัดแล้วลงตัวแปร
+            document.getElementById('issueImgPreview').innerHTML = '<img src="'+currentIssueB64+'" style="max-width:100%; border-radius:8px; border:1px solid var(--border);">';
+            hideLoading();
+          };
+          img.src = e.target.result;
+        };
+        r.readAsDataURL(file);
+      });
     }
 
+    // ส่งรายงานแจ้งเหตุฉุกเฉิน
     function submitIssue() {
       var txt = document.getElementById('issueText').value;
-      var fileInput = document.getElementById('issueFile');
-      if(!txt || !fileInput.files.length) return showToast("กรุณาระบุรายละเอียดและแนบรูปภาพ", "error");
+      if(!txt || !currentIssueB64) return showToast("กรุณาระบุรายละเอียดและแนบรูปภาพ", "error");
       if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนส่ง", "error");
+      
       showLoading("กำลังส่งรายงาน...");
-      var r = new FileReader();
-      r.onload = e => {
-        // ✅ เพิ่ม Fallback ให้ Role
-        apiCall({ type: 'submit_issue', text: txt, image: e.target.result, lat: currentLoc?.lat, lng: currentLoc?.lng, fullName: userProfile.fullName, role: userProfile.role || "Guard" })
-          .then(res => { showToast(res.message, res.success ? "success" : "error"); if(res.success) { document.getElementById('issueText').value = ''; document.getElementById('issueImgPreview').innerHTML = ''; showSection('mainMenu'); } });
-      };
-      r.readAsDataURL(fileInput.files[0]);
+      apiCall({ type: 'submit_issue', text: txt, image: currentIssueB64, lat: currentLoc?.lat, lng: currentLoc?.lng, fullName: userProfile.fullName, role: userProfile.role || "Guard" })
+        .then(res => { 
+          showToast(res.message, res.success ? "success" : "error"); 
+          if(res.success) { 
+            document.getElementById('issueText').value = ''; 
+            document.getElementById('issueImgPreview').innerHTML = ''; 
+            currentIssueB64 = ""; // เคลียร์รูปทิ้งหลังส่งเสร็จ
+            document.getElementById('issueFile').value = '';
+            showSection('mainMenu'); 
+          } 
+        });
     }
 
     function submitVehicle() {
