@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
   <style>
     :root {
       --bg:        #0d0f14; --surface:   #161a23; --surface2:  #1e2433;
@@ -399,20 +400,60 @@
       document.getElementById('taskList').innerHTML = html || `<div style="text-align:center;padding:20px;color:var(--text-muted)">ไม่มีภารกิจค้างในระบบ</div>`;
     }
 
-    // ฟังก์ชันเก็บรูปภาพเข้าหน่วยความจำชั่วคราว
+    // ฟังก์ชันเก็บรูปภาพเข้าหน่วยความจำชั่วคราว พร้อมสแกน EXIF และย่อขนาดภาพ
     function stageTaskImage(input, rowIdx) {
       if(!input.files.length) return;
-      showLoading("กำลังเตรียมรูป...");
       var file = input.files[0];
-      var r = new FileReader();
-      r.onload = e => {
-        if (!stagedTaskImages[rowIdx]) stagedTaskImages[rowIdx] = [];
-        stagedTaskImages[rowIdx].push(e.target.result);
-        input.value = ""; // เคลียร์ input ให้พร้อมถ่ายใหม่
-        renderTasks(); // รีเฟรชหน้าจอโชว์รูปทันที
-        hideLoading();
-      }
-      r.readAsDataURL(file);
+      
+      showLoading("กำลังตรวจสอบเวลาภาพถ่าย...");
+      
+      // 1. ตรวจสอบข้อมูล EXIF ของภาพ
+      EXIF.getData(file, function() {
+        var dateStr = EXIF.getTag(this, "DateTimeOriginal");
+        var takenDate;
+        var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        if (dateStr) {
+          var parts     = dateStr.split(' ');
+          var dateParts = parts[0].split(':');
+          var timeParts = parts[1].split(':');
+          takenDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]),
+                               parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2]));
+        } else {
+          if (isIOS) { takenDate = new Date(file.lastModified); } 
+          else { hideLoading(); showToast("ไม่อนุญาตให้ใช้รูปแคปหน้าจอ ถ่ายสดเท่านั้น ❌", "error"); input.value = ""; return; }
+        }
+
+        var diffMinutes  = Math.abs(new Date() - takenDate) / (1000 * 60);
+        if (diffMinutes > 5) {
+          hideLoading(); showToast("รูปภาพเก่าเกินไป (" + Math.floor(diffMinutes) + " นาทีที่แล้ว) ถ่ายใหม่ ❌", "error");
+          input.value = ""; return;
+        }
+
+        // 2. ถ้ารูปผ่านเกณฑ์เวลา ให้นำมาย่อขนาดด้วย Canvas เพื่อป้องกันแอปค้าง
+        var r = new FileReader();
+        r.onload = e => {
+          var img = new Image();
+          img.onload = function() {
+            var MAX_W  = 800;
+            var scale  = Math.min(1, MAX_W / img.width);
+            var canvas = document.createElement('canvas');
+            canvas.width  = Math.round(img.width  * scale);
+            canvas.height = Math.round(img.height * scale);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            var b64 = canvas.toDataURL('image/jpeg', 0.72); // บีบอัดเหลือ 72%
+
+            // 3. นำรูปที่ย่อแล้วไปพักไว้เตรียมส่ง
+            if (!stagedTaskImages[rowIdx]) stagedTaskImages[rowIdx] = [];
+            stagedTaskImages[rowIdx].push(b64);
+            input.value = ""; 
+            renderTasks(); 
+            hideLoading();
+          };
+          img.src = e.target.result;
+        }
+        r.readAsDataURL(file);
+      });
     }
 
     // ฟังก์ชันลบรูปที่ถ่ายพลาด
