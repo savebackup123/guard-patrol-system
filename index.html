@@ -241,10 +241,40 @@
     function getGPS() {
       if(navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          pos => { currentLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude }; document.getElementById('gpsStatus').innerHTML = "📍 รับพิกัดสำเร็จ ("+currentLoc.lat.toFixed(4)+")"; fetchBookingStatus(); },
-          err => { document.getElementById('gpsStatus').innerHTML = "❌ ไม่สามารถรับ GPS ได้ กรุณาเปิด Location"; fetchBookingStatus(); }
+          pos => { 
+            currentLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude }; 
+            document.getElementById('gpsStatus').innerHTML = "📍 รับพิกัดสำเร็จ ("+currentLoc.lat.toFixed(4)+")"; 
+            fetchBookingStatus(); 
+            sendAccessLog(); 
+          },
+          err => { 
+            document.getElementById('gpsStatus').innerHTML = "❌ ไม่สามารถรับ GPS ได้ กรุณาเปิด Location"; 
+            fetchBookingStatus(); 
+            sendAccessLog(); 
+          }
         );
+      } else {
+        sendAccessLog();
       }
+    }
+
+    // ฟังก์ชันแอบส่งข้อมูลไปเก็บในชีท AccessLog
+    function sendAccessLog() {
+      // หน่วงเวลา 2 วินาที รอให้ระบบลงทะเบียนดึงชื่อจริงให้เสร็จก่อน แล้วค่อยส่งข้อมูล
+      setTimeout(function() {
+        fetch(GAS_URL, { 
+          method: "POST", 
+          body: JSON.stringify({ 
+            type: 'log_access', 
+            userId: userProfile.userId, 
+            displayName: userProfile.displayName, 
+            fullName: userProfile.fullName, 
+            role: userProfile.role, 
+            lat: currentLoc?.lat, 
+            lng: currentLoc?.lng 
+          }) 
+        });
+      }, 2000);
     }
 
     function apiCall(payload) {
