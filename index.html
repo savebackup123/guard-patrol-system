@@ -26,7 +26,6 @@
     
     .status-bar { width: 100%; max-width: 420px; margin: 20px 20px 0; padding: 12px 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; gap: 10px; font-size: 13px; }
     
-    /* แก้ไขขนาดแถบตัววิ่งให้แสดงเต็ม */
     .booking-bar { width: 100%; max-width: 420px; margin: 12px 20px 0; padding: 12px 16px; background: rgba(79, 158, 255, 0.08); border: 1px dashed rgba(79, 158, 255, 0.4); border-radius: var(--radius); display: none; align-items: center; gap: 12px; font-size: 14px; color: var(--text); }
     .booking-text { flex: 1; overflow: hidden; white-space: nowrap; width: 100%; }
     .booking-highlight { color: var(--accent); font-weight: 700; font-size: 15px; }
@@ -140,7 +139,6 @@
           <div class="menu-icon" style="background:rgba(79,158,255,0.12)">📊</div>
           <div class="menu-info"><div class="menu-label">กระดานตรวจสอบ (Dashboard)</div><div class="menu-desc">เช็กสถานะการส่งงานของยามในกะ</div></div>
         </div>
-        <!-- วางต่อท้ายปุ่มกระดานตรวจสอบ (สีฟ้า) -->
         <div class="menu-card" style="background: rgba(224,92,92,0.05); border-color: rgba(224,92,92,0.2);" onclick="showSection('issueSec')">
           <div class="menu-icon" style="background: rgba(224,92,92,0.12)">🚨</div>
           <div class="menu-info"><div class="menu-label" style="color: var(--danger)">แจ้งปัญหา/เหตุฉุกเฉิน</div><div class="menu-desc">รายงานเหตุผิดปกติ พร้อมแนบรูป</div></div>
@@ -187,7 +185,6 @@
       <button class="btn btn-ghost" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
     </div>
 
-    <!-- หน้าแจ้งปัญหาฉุกเฉิน -->
     <div id="issueSec" class="section">
       <div class="section-title">🚨 แจ้งปัญหา/เหตุฉุกเฉิน</div>
       <textarea id="issueText" placeholder="ระบุรายละเอียดปัญหาที่พบ..." rows="3" style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-family:var(--font); font-size:14px; outline:none; margin-bottom:14px; resize:none;"></textarea>
@@ -198,7 +195,6 @@
       <button class="btn btn-ghost" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
     </div>
 
-    <!-- หน้าบันทึกและค้นหารถบริการ -->
     <div id="vehicleSec" class="section">
       <div class="section-title">🚙 บันทึกรถเข้า-ออกพื้นที่</div>
       <input type="text" id="vehPlate" placeholder="ทะเบียนรถ (เช่น กก 1111 กทม)">
@@ -211,7 +207,6 @@
       <input type="text" id="searchPlate" placeholder="พิมพ์เลขทะเบียนเพื่อค้นหา (เช่น 1221)">
       <button class="btn btn-success" onclick="searchVehicle()">ค้นหาประวัติ</button>
       
-      <!-- พื้นที่แสดงผลการค้นหา -->
       <div id="vehicleSearchResult" style="margin-top: 14px;"></div>
 
       <button class="btn btn-ghost" style="margin-top:20px;" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
@@ -221,7 +216,7 @@
 
   <script>
     var GAS_URL = "https://script.google.com/macros/s/AKfycbxtB_P4DDH_X2o88spkBpJaL4Kd-fF9yY8ifSEEC-uJ-91DngMVsjlhfUWnOva_q286kQ/exec"; 
-    var userProfile = { userId: "U_Mock", displayName: "Test", fullName: "", nickname: "", role: "" };
+    var userProfile = { userId: "U_Mock", displayName: "Test", fullName: "", nickname: "", role: "Guard" }; // ✅ กำหนดค่า Default เผื่อไว้
     var currentLoc = null;
 
     async function init() {
@@ -258,9 +253,7 @@
       }
     }
 
-    // ฟังก์ชันแอบส่งข้อมูลไปเก็บในชีท AccessLog
     function sendAccessLog() {
-      // หน่วงเวลา 2 วินาที รอให้ระบบลงทะเบียนดึงชื่อจริงให้เสร็จก่อน แล้วค่อยส่งข้อมูล
       setTimeout(function() {
         fetch(GAS_URL, { 
           method: "POST", 
@@ -269,7 +262,7 @@
             userId: userProfile.userId, 
             displayName: userProfile.displayName, 
             fullName: userProfile.fullName, 
-            role: userProfile.role, 
+            role: userProfile.role || "Guard", // ✅ กัน Role ว่าง
             lat: currentLoc?.lat, 
             lng: currentLoc?.lng 
           }) 
@@ -304,7 +297,8 @@
 
     function submitCheckIn(action) {
       if(!currentLoc && userProfile.role !== "Observer") return showToast("รอค้นหาพิกัด GPS สักครู่", "error");
-      apiCall({ type: 'checkin_out', action: action, lat: currentLoc?.lat, lng: currentLoc?.lng, fullName: userProfile.fullName, role: userProfile.role }).then(res => {
+      // ✅ ส่ง Role ไปใน payload พร้อม Fallback
+      apiCall({ type: 'checkin_out', action: action, lat: currentLoc?.lat, lng: currentLoc?.lng, fullName: userProfile.fullName, role: userProfile.role || "Guard" }).then(res => {
         showToast(res.message, res.success ? "success" : "error");
       });
     }
@@ -318,6 +312,7 @@
 
     function openSchedule() { 
       if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนเข้าดูข้อมูล", "error");
+      showSection('scheduleSec'); // ✅ สลับหน้าทันทีก่อนโหลด ไม่ค้าง
       loadSchedule(0, 6); 
     }
 
@@ -329,7 +324,8 @@
 
       document.getElementById('scheduleListContainer').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">กำลังโหลด...</div>';
       
-      apiCall({ type: 'get_booking_14', daysBack: daysBack, daysForward: daysForward, lat: currentLoc?.lat, lng: currentLoc?.lng, role: userProfile.role }).then(res => {
+      // ✅ เพิ่ม Fallback ให้ Role
+      apiCall({ type: 'get_booking_14', daysBack: daysBack, daysForward: daysForward, lat: currentLoc?.lat, lng: currentLoc?.lng, role: userProfile.role || "Guard" }).then(res => {
         if(res.success) {
           var html = '';
           res.data.forEach(d => {
@@ -345,7 +341,6 @@
             html += `</div>`;
           });
           document.getElementById('scheduleListContainer').innerHTML = html;
-          showSection('scheduleSec');
         } else {
           showToast(res.message, "error");
           document.getElementById('scheduleListContainer').innerHTML = `<div style="text-align:center;padding:20px;color:var(--danger)">${res.message || "โหลดไม่สำเร็จ"}</div>`;
@@ -355,25 +350,28 @@
 
     function openTaskpool() {
       if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนเข้าดูข้อมูล", "error");
-      apiCall({ type: 'get_tasks', lat: currentLoc?.lat, lng: currentLoc?.lng, role: userProfile.role }).then(res => {
+      
+      showSection('taskpoolSec'); // ✅ สลับหน้าทันทีก่อนโหลด ไม่ค้าง
+
+      // ✅ เพิ่ม Fallback ให้ Role
+      apiCall({ type: 'get_tasks', lat: currentLoc?.lat, lng: currentLoc?.lng, role: userProfile.role || "Guard" }).then(res => {
         if(res.success) {
           var html = '';
           res.tasks.forEach(t => {
             var sc = t.status === 'Active' ? 'active' : t.status === 'Completed' ? 'completed' : 'missed';
-            
-            // เพิ่มการแสดงผลสีแดงเมื่อรูปมั่ว (Rejected)
             var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : 
                      t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : 
                      t.status === 'Rejected' ? '<span style="color:var(--danger)">❌ รูปไม่ผ่าน (ทุจริต)</span>' : 
                      '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>';
-            
             var btn = t.status === 'Active' ? `<div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">📸 อัปโหลดรูปภาพภารกิจนี้</div><input type="file" id="file_${t.rowIdx}" multiple accept="image/*" capture="environment" style="display:none" onchange="uploadTasks(this, ${t.rowIdx})">` : '';
             var imgs = t.images && t.images.length ? `<div class="task-imgs">${t.images.map(url => `<img src="${url}" onclick="window.open('${url.replace('s200','s1600')}')">`).join('')}</div>` : '';
             html += `<div class="task-card ${sc}"><div class="task-time">⏰ ${t.timeLabel}</div><div class="task-name">${t.taskName}</div><div class="task-status">${st}</div>${imgs}<div style="margin-top:10px">${btn}</div></div>`;
           });
           document.getElementById('taskList').innerHTML = html || `<div style="text-align:center;padding:20px;color:var(--text-muted)">ไม่มีภารกิจค้างในระบบ</div>`;
-          showSection('taskpoolSec');
-        } else showToast(res.message, "error");
+        } else {
+          showToast(res.message, "error");
+          showSection('mainMenu'); // ✅ หาก API Error เด้งกลับหน้าหลัก
+        }
       });
     }
 
@@ -387,7 +385,8 @@
         r.onload = e => {
           b64Arr.push(e.target.result); loaded++;
           if(loaded === files.length) {
-            apiCall({ type: 'submit_task', rowIdx: rowIdx, lat: currentLoc?.lat, lng: currentLoc?.lng, images: b64Arr, fullName: userProfile.fullName, role: userProfile.role })
+            // ✅ เพิ่ม Fallback ให้ Role
+            apiCall({ type: 'submit_task', rowIdx: rowIdx, lat: currentLoc?.lat, lng: currentLoc?.lng, images: b64Arr, fullName: userProfile.fullName, role: userProfile.role || "Guard" })
               .then(res => { showToast(res.message, res.success ? "success" : "error"); if(res.success) openTaskpool(); });
           }
         }
@@ -400,6 +399,7 @@
         if(res.success) { document.getElementById('dashOk').innerText = res.completed; document.getElementById('dashNo').innerText = res.missed; showSection('dashboardSec'); }
       });
     }
+
     function previewIssueImg(input) {
       if(input.files && input.files[0]) {
         var r = new FileReader();
@@ -416,7 +416,8 @@
       showLoading("กำลังส่งรายงาน...");
       var r = new FileReader();
       r.onload = e => {
-        apiCall({ type: 'submit_issue', text: txt, image: e.target.result, lat: currentLoc?.lat, lng: currentLoc?.lng, fullName: userProfile.fullName, role: userProfile.role })
+        // ✅ เพิ่ม Fallback ให้ Role
+        apiCall({ type: 'submit_issue', text: txt, image: e.target.result, lat: currentLoc?.lat, lng: currentLoc?.lng, fullName: userProfile.fullName, role: userProfile.role || "Guard" })
           .then(res => { showToast(res.message, res.success ? "success" : "error"); if(res.success) { document.getElementById('issueText').value = ''; document.getElementById('issueImgPreview').innerHTML = ''; showSection('mainMenu'); } });
       };
       r.readAsDataURL(fileInput.files[0]);
@@ -430,6 +431,7 @@
       apiCall({ type: 'submit_vehicle', plate: plate, purpose: purpose, fullName: userProfile.fullName })
         .then(res => { showToast(res.message, res.success ? "success" : "error"); if(res.success) { document.getElementById('vehPlate').value = ''; document.getElementById('vehPurpose').value = ''; showSection('mainMenu'); } });
     }
+
     function searchVehicle() {
       var plate = document.getElementById('searchPlate').value;
       if(!plate) return showToast("กรุณาระบุทะเบียนรถที่ต้องการค้นหา", "error");
