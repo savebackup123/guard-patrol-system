@@ -130,7 +130,7 @@
         </div>
         <div class="menu-card orange" onclick="openTaskpool()">
           <div class="menu-icon" style="background:rgba(245,166,35,0.12)">🔦</div>
-          <div class="menu-info"><div class="menu-label">ภารกิจเดินตรวจตรา (Taskpool)</div><div class="menu-desc">สุ่มภารกิจใหม่ทุกๆ 1 ชั่วโมง</div></div>
+          <div class="menu-info"><div class="menu-label">ภารกิจเดินตรวจตรา (Taskpool)</div><div class="menu-desc">สุ่มภารกิจใหม่ทุกๆ 1 ชั่วโมง(จะภารกิจใหม่มาหลัง xx.30น</div></div>
         </div>
         <div class="menu-card purple" onclick="openSchedule()">
           <div class="menu-icon" style="background:rgba(168,85,247,0.12)">🗓️</div>
@@ -189,7 +189,7 @@
     <div id="issueSec" class="section">
       <div class="section-title">🚨 แจ้งปัญหา/เหตุฉุกเฉิน</div>
       <textarea id="issueText" placeholder="ระบุรายละเอียดปัญหาที่พบ..." rows="3" style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-family:var(--font); font-size:14px; outline:none; margin-bottom:14px; resize:none;"></textarea>
-      <div class="upload-btn" onclick="document.getElementById('issueFile').click()">📸 อัปโหลดรูปภาพประกอบ (บังคับ)</div>
+      <div class="upload-btn" onclick="document.getElementById('issueFile').click()">📸 อัปโหลดรูปภาพประกอบ(บังคับ)</div>
       <input type="file" id="issueFile" accept="image/*" style="display:none" onchange="previewIssueImg(this)">
       <div id="issueImgPreview" style="margin-top:10px; text-align:center;"></div>
       <button class="btn btn-danger" onclick="submitIssue()">ส่งรายงานฉุกเฉิน</button>
@@ -338,7 +338,7 @@
             if(d.rooms.length === 0) html += `<div class="empty-day-msg">วิลล่าว่าง ✓</div>`;
             else {
               d.rooms.forEach(r => {
-                var st = r.status === 'checkin' ? '🟢 เข้าพัก' : r.status === 'stay' ? '🟡 พักต่อ' : '🔴 เช็คเอาท์';
+                var st = r.status === 'checkin' ? '🟢 เข้าพัก' : r.status === 'stay' ? '🟡 พักต่อ/ห้องเข้าสวนกัน' : '🔴 จะเช็คเอาท์';
                 html += `<div class="schedule-room-item status-${r.status}"><div class="room-badge">${r.room}</div><div class="room-details"><span style="font-weight:bold">${st}</span><br><span style="color:var(--text-muted);font-size:12px">${r.detail}</span></div></div>`;
               });
             }
