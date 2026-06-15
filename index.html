@@ -350,48 +350,95 @@
 
     function openTaskpool() {
       if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนเข้าดูข้อมูล", "error");
-      
-      showSection('taskpoolSec'); // ✅ สลับหน้าทันทีก่อนโหลด ไม่ค้าง
-
-      // ✅ เพิ่ม Fallback ให้ Role
+      showSection('taskpoolSec'); 
       apiCall({ type: 'get_tasks', lat: currentLoc?.lat, lng: currentLoc?.lng, role: userProfile.role || "Guard" }).then(res => {
         if(res.success) {
-          var html = '';
-          res.tasks.forEach(t => {
-            var sc = t.status === 'Active' ? 'active' : t.status === 'Completed' ? 'completed' : 'missed';
-            var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : 
-                     t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : 
-                     t.status === 'Rejected' ? '<span style="color:var(--danger)">❌ รูปไม่ผ่าน (ทุจริต)</span>' : 
-                     '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>';
-            var btn = t.status === 'Active' ? `<div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">📸 อัปโหลดรูปภาพภารกิจนี้</div><input type="file" id="file_${t.rowIdx}" multiple accept="image/*" capture="environment" style="display:none" onchange="uploadTasks(this, ${t.rowIdx})">` : '';
-            var imgs = t.images && t.images.length ? `<div class="task-imgs">${t.images.map(url => `<img src="${url}" onclick="window.open('${url.replace('s200','s1600')}')">`).join('')}</div>` : '';
-            html += `<div class="task-card ${sc}"><div class="task-time">⏰ ${t.timeLabel}</div><div class="task-name">${t.taskName}</div><div class="task-status">${st}</div>${imgs}<div style="margin-top:10px">${btn}</div></div>`;
-          });
-          document.getElementById('taskList').innerHTML = html || `<div style="text-align:center;padding:20px;color:var(--text-muted)">ไม่มีภารกิจค้างในระบบ</div>`;
+          currentTasks = res.tasks;
+          renderTasks(); // ใช้วิธีเรนเดอร์ UI เพื่อไม่ให้ต้องโหลดหน้าใหม่ทุกครั้งที่ถ่ายรูป
         } else {
           showToast(res.message, "error");
-          showSection('mainMenu'); // ✅ หาก API Error เด้งกลับหน้าหลัก
+          showSection('mainMenu'); 
         }
       });
     }
 
-    function uploadTasks(input, rowIdx) {
-      if(!input.files.length) return;
-      if(!currentLoc && userProfile.role !== "Observer") return showToast("รอ GPS ก่อนส่ง", "error");
-      showLoading("กำลังอัปโหลด...");
-      var files = Array.from(input.files), b64Arr = [], loaded = 0;
-      files.forEach(f => {
-        var r = new FileReader();
-        r.onload = e => {
-          b64Arr.push(e.target.result); loaded++;
-          if(loaded === files.length) {
-            // ✅ เพิ่ม Fallback ให้ Role
-            apiCall({ type: 'submit_task', rowIdx: rowIdx, lat: currentLoc?.lat, lng: currentLoc?.lng, images: b64Arr, fullName: userProfile.fullName, role: userProfile.role || "Guard" })
-              .then(res => { showToast(res.message, res.success ? "success" : "error"); if(res.success) openTaskpool(); });
-          }
+    function renderTasks() {
+      var html = '';
+      currentTasks.forEach(t => {
+        var sc = t.status === 'Active' ? 'active' : t.status === 'Completed' ? 'completed' : 'missed';
+        var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : 
+                 t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : 
+                 t.status === 'Rejected' ? '<span style="color:var(--danger)">❌ รูปไม่ผ่าน (ทุจริต)</span>' : 
+                 '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>';
+        
+        var btn = '';
+        if (t.status === 'Active') {
+            var stagedImgs = stagedTaskImages[t.rowIdx] || [];
+            
+            // 1. ส่วนแสดงรูปภาพที่ถ่ายไว้ (พักไว้ก่อนส่ง)
+            var previewHtml = stagedImgs.length > 0 ? 
+              `<div class="task-imgs" style="margin-bottom:10px">${stagedImgs.map((b64, idx) => `<img src="${b64}" onclick="removeStagedImage(${t.rowIdx}, ${idx})" style="border-color:var(--warn)">`).join('')}</div>
+               <div style="font-size:11px; color:var(--warn); margin-bottom:10px;">* จิ้มที่รูปเพื่อลบทิ้งได้</div>` : '';
+            
+            // 2. ปุ่มถ่ายรูป (จะเปลี่ยนข้อความถ้ามีรูปแล้ว)
+            var addBtnText = stagedImgs.length > 0 ? "📸 ถ่ายรูปเพิ่ม" : "📸 ถ่ายรูปสถานที่จริง";
+            
+            // 3. ปุ่มกดยืนยันส่งงาน (จะโผล่มาก็ต่อเมื่อถ่ายไปแล้วอย่างน้อย 1 รูป)
+            var submitBtn = stagedImgs.length > 0 ? 
+              `<button class="btn btn-success" style="margin-top:10px; width:100%" onclick="submitStagedTasks(${t.rowIdx})">✅ ยืนยันส่งงาน (${stagedImgs.length} รูป)</button>` : '';
+
+            btn = `${previewHtml}
+                   <div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">${addBtnText}</div>
+                   ${submitBtn}
+                   <input type="file" id="file_${t.rowIdx}" accept="image/*" capture="environment" style="display:none" onchange="stageTaskImage(this, ${t.rowIdx})">`;
         }
-        r.readAsDataURL(f);
+
+        var imgs = t.images && t.images.length ? `<div class="task-imgs">${t.images.map(url => `<img src="${url}" onclick="window.open('${url.replace('s200','s1600')}')">`).join('')}</div>` : '';
+        html += `<div class="task-card ${sc}"><div class="task-time">⏰ ${t.timeLabel}</div><div class="task-name">${t.taskName}</div><div class="task-status">${st}</div>${imgs}<div style="margin-top:10px">${btn}</div></div>`;
       });
+      document.getElementById('taskList').innerHTML = html || `<div style="text-align:center;padding:20px;color:var(--text-muted)">ไม่มีภารกิจค้างในระบบ</div>`;
+    }
+
+    // ฟังก์ชันเก็บรูปภาพเข้าหน่วยความจำชั่วคราว
+    function stageTaskImage(input, rowIdx) {
+      if(!input.files.length) return;
+      showLoading("กำลังเตรียมรูป...");
+      var file = input.files[0];
+      var r = new FileReader();
+      r.onload = e => {
+        if (!stagedTaskImages[rowIdx]) stagedTaskImages[rowIdx] = [];
+        stagedTaskImages[rowIdx].push(e.target.result);
+        input.value = ""; // เคลียร์ input ให้พร้อมถ่ายใหม่
+        renderTasks(); // รีเฟรชหน้าจอโชว์รูปทันที
+        hideLoading();
+      }
+      r.readAsDataURL(file);
+    }
+
+    // ฟังก์ชันลบรูปที่ถ่ายพลาด
+    function removeStagedImage(rowIdx, imgIdx) {
+      if (stagedTaskImages[rowIdx]) {
+        stagedTaskImages[rowIdx].splice(imgIdx, 1);
+        renderTasks();
+      }
+    }
+
+    // ฟังก์ชันส่งรูปทั้งหมดรวดเดียว
+    function submitStagedTasks(rowIdx) {
+      var images = stagedTaskImages[rowIdx];
+      if(!images || images.length === 0) return showToast("กรุณาถ่ายรูปก่อนส่ง", "error");
+      if(!currentLoc && userProfile.role !== "Observer") return showToast("รอ GPS ก่อนส่ง", "error");
+      
+      showLoading("กำลังอัปโหลด " + images.length + " รูป...");
+      
+      apiCall({ type: 'submit_task', rowIdx: rowIdx, lat: currentLoc?.lat, lng: currentLoc?.lng, images: images, fullName: userProfile.fullName, role: userProfile.role || "Guard" })
+        .then(res => { 
+          showToast(res.message, res.success ? "success" : "error"); 
+          if(res.success) {
+            delete stagedTaskImages[rowIdx]; // ล้างรูปที่พักไว้ทิ้งหลังส่งสำเร็จ
+            openTaskpool(); // โหลดข้อมูลกระดานงานใหม่จากเซิร์ฟเวอร์
+          }
+        });
     }
 
     function openDashboard() {
