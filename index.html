@@ -190,7 +190,7 @@
       <div class="section-title">🚨 แจ้งปัญหา/เหตุฉุกเฉิน</div>
       <textarea id="issueText" placeholder="ระบุรายละเอียดปัญหาที่พบ..." rows="3" style="width:100%; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; color:var(--text); font-family:var(--font); font-size:14px; outline:none; margin-bottom:14px; resize:none;"></textarea>
       <div class="upload-btn" onclick="document.getElementById('issueFile').click()">📸 อัปโหลดรูปภาพประกอบ (บังคับ)</div>
-      <input type="file" id="issueFile" accept="image/*" capture="environment" style="display:none" onchange="previewIssueImg(this)">
+      <input type="file" id="issueFile" accept="image/*" style="display:none" onchange="previewIssueImg(this)">
       <div id="issueImgPreview" style="margin-top:10px; text-align:center;"></div>
       <button class="btn btn-danger" onclick="submitIssue()">ส่งรายงานฉุกเฉิน</button>
       <button class="btn btn-ghost" onclick="showSection('mainMenu')">← กลับเมนูหลัก</button>
@@ -491,54 +491,29 @@
       });
     }
 
-    // พรีวิวภาพแจ้งเหตุ พร้อมสแกน EXIF และบีบอัดภาพ
+    // พรีวิวภาพแจ้งเหตุ (อนุญาตภาพเก่า/แกลเลอรี่) แต่ยังคงบีบอัดขนาดภาพไม่ให้แอปค้าง
     function previewIssueImg(input) {
       if(!input.files.length) return;
+      showLoading("กำลังเตรียมรูปภาพ...");
       var file = input.files[0];
-      
-      showLoading("กำลังตรวจสอบเวลาภาพถ่าย...");
-      
-      EXIF.getData(file, function() {
-        var dateStr = EXIF.getTag(this, "DateTimeOriginal");
-        var takenDate;
-        var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
-        if (dateStr) {
-          var parts     = dateStr.split(' ');
-          var dateParts = parts[0].split(':');
-          var timeParts = parts[1].split(':');
-          takenDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]),
-                               parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2]));
-        } else {
-          if (isIOS) { takenDate = new Date(file.lastModified); } 
-          else { hideLoading(); showToast("ไม่อนุญาตให้ใช้รูปแคปหน้าจอ ถ่ายสดเท่านั้น ❌", "error"); input.value = ""; return; }
-        }
-
-        var diffMinutes  = Math.abs(new Date() - takenDate) / (1000 * 60);
-        if (diffMinutes > 5) {
-          hideLoading(); showToast("รูปภาพเก่าเกินไป (" + Math.floor(diffMinutes) + " นาทีที่แล้ว) ถ่ายใหม่ ❌", "error");
-          input.value = ""; return;
-        }
-
-        var r = new FileReader();
-        r.onload = function(e) {
-          var img = new Image();
-          img.onload = function() {
-            var MAX_W  = 800;
-            var scale  = Math.min(1, MAX_W / img.width);
-            var canvas = document.createElement('canvas');
-            canvas.width  = Math.round(img.width  * scale);
-            canvas.height = Math.round(img.height * scale);
-            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            
-            currentIssueB64 = canvas.toDataURL('image/jpeg', 0.72); // เก็บรูปที่บีบอัดแล้วลงตัวแปร
-            document.getElementById('issueImgPreview').innerHTML = '<img src="'+currentIssueB64+'" style="max-width:100%; border-radius:8px; border:1px solid var(--border);">';
-            hideLoading();
-          };
-          img.src = e.target.result;
+      var r = new FileReader();
+      r.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+          var MAX_W  = 800;
+          var scale  = Math.min(1, MAX_W / img.width);
+          var canvas = document.createElement('canvas');
+          canvas.width  = Math.round(img.width  * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          
+          currentIssueB64 = canvas.toDataURL('image/jpeg', 0.72); // บีบอัดภาพ
+          document.getElementById('issueImgPreview').innerHTML = '<img src="'+currentIssueB64+'" style="max-width:100%; border-radius:8px; border:1px solid var(--border);">';
+          hideLoading();
         };
-        r.readAsDataURL(file);
-      });
+        img.src = e.target.result;
+      };
+      r.readAsDataURL(file);
     }
 
     // ส่งรายงานแจ้งเหตุฉุกเฉิน
