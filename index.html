@@ -617,9 +617,14 @@
         });
     }
 
-    // ฟังก์ชันสั่งไฟกระพริบทำงาน
+    // ฟังก์ชันสั่งไฟกระพริบทำงาน (อัปเดต: อนุญาตแอดมิน VIP)
     function refreshMenuStatus() {
-      if (!userProfile.fullName || userProfile.role === "Observer") return; // แอดมินไม่ต้องกระพริบ
+      // 1. กำหนดคีย์เวิร์ดชื่อแอดมินที่อนุญาตให้เห็นไฟกระพริบ (ใส่ชื่อเล่น หรือบางส่วนของชื่อก็ได้)
+      var vipNames = ["โม", "วรากร", "Minnie การละคร"]; 
+      var isVip = vipNames.some(name => userProfile.fullName.includes(name) || userProfile.displayName.includes(name));
+
+      // 2. ถ้าไม่มีชื่อ หรือ (เป็น Observer และไม่ใช่ VIP ที่กำหนด) ให้หยุดการทำงาน
+      if (!userProfile.fullName || (userProfile.role === "Observer" && !isVip)) return;
       
       fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'get_user_status', fullName: userProfile.fullName }) })
         .then(r => r.json()).then(res => {
@@ -627,13 +632,13 @@
              var mCheckin = document.getElementById('menuCheckin');
              var mTask = document.getElementById('menuTaskpool');
              
-             // 1. ถ้ายังไม่ตอกบัตร ให้กระพริบสีเขียวเรียกร้องความสนใจ
+             // ไฟเขียว: ถ้ายังไม่ตอกบัตร ให้กระพริบ
              if (mCheckin) res.isCheckedIn ? mCheckin.classList.remove('alert-blink-green') : mCheckin.classList.add('alert-blink-green');
              
-             // 2. ถ้าตอกบัตรแล้ว และมีงานค้างอยู่ ค่อยกระพริบสีส้ม
+             // ไฟส้ม: ถ้าตอกบัตรแล้ว และมีงานค้าง ค่อยกระพริบ
              if (mTask) (res.isCheckedIn && res.hasActiveTasks) ? mTask.classList.add('alert-blink-orange') : mTask.classList.remove('alert-blink-orange');
            }
-        }).catch(err => console.error("Status check failed", err)); // กันแอปค้างถ้าเน็ตหลุด
+        }).catch(err => console.error("Status check failed", err));
     }
     
     function showLoading(t="รอสักครู่") { document.getElementById('loadingOverlay').classList.add('active'); }
