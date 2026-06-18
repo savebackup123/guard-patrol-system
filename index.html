@@ -90,6 +90,25 @@
     .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--surface2); border: 1px solid var(--border); border-radius: 16px; padding: 14px 20px; font-size: 14px; text-align: center; opacity: 0; transition: 0.3s; z-index: 1000; width: 90vw; max-width: 400px; color: var(--accent2); }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
     .toast.error { color: var(--danger); border-color: var(--danger); }
+    /* ---- ระบบไฟกระพริบแจ้งเตือน (Pulse Glow) ---- */
+    @keyframes pulse-green {
+      0% { box-shadow: 0 0 0 0 rgba(126, 200, 160, 0.7); }
+      70% { box-shadow: 0 0 0 12px rgba(126, 200, 160, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(126, 200, 160, 0); }
+    }
+    @keyframes pulse-orange {
+      0% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.7); }
+      70% { box-shadow: 0 0 0 12px rgba(245, 166, 35, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0); }
+    }
+    .alert-blink-green { 
+      animation: pulse-green 1.5s infinite; 
+      border-color: var(--accent2) !important; 
+    }
+    .alert-blink-orange { 
+      animation: pulse-orange 1.5s infinite; 
+      border-color: var(--warn) !important; 
+    }
   </style>
 </head>
 <body>
@@ -124,13 +143,14 @@
 
     <div id="mainMenu" class="section">
       <div class="menu-grid">
-        <div class="menu-card green" onclick="showSection('checkinSec')">
+        <div class="menu-card green" id="menuCheckin" onclick="showSection('checkinSec')">
           <div class="menu-icon" style="background:rgba(126,200,160,0.12)">📸</div>
           <div class="menu-info"><div class="menu-label">ตอกบัตร รับ-ส่งกะ</div><div class="menu-desc">บันทึกเวลาปฏิบัติงานประจำวัน</div></div>
         </div>
-        <div class="menu-card orange" onclick="openTaskpool()">
+
+        <div class="menu-card orange" id="menuTaskpool" onclick="openTaskpool()">
           <div class="menu-icon" style="background:rgba(245,166,35,0.12)">🔦</div>
-          <div class="menu-info"><div class="menu-label">ภารกิจเดินตรวจตรา (Taskpool)</div><div class="menu-desc">สุ่มภารกิจใหม่ทุกๆ 1 ชั่วโมง(จะภารกิจใหม่มาหลัง xx.30น</div></div>
+          <div class="menu-info"><div class="menu-label">ภารกิจเดินตรวจตรา (Taskpool)</div><div class="menu-desc">สุ่มภารกิจใหม่ทุกๆ 1 ชั่วโมง</div></div>
         </div>
         <div class="menu-card purple" onclick="openSchedule()">
           <div class="menu-icon" style="background:rgba(168,85,247,0.12)">🗓️</div>
@@ -570,7 +590,32 @@
         });
     }
 
-    function showSection(id) { document.querySelectorAll('.section').forEach(e => e.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+    function showSection(id) { 
+      document.querySelectorAll('.section').forEach(e => e.classList.remove('active')); 
+      document.getElementById(id).classList.add('active'); 
+      
+      // ทุกครั้งที่เปิดหน้าเมนูหลัก ให้มันวิ่งไปอัปเดตไฟกระพริบ
+      if (id === 'mainMenu') refreshMenuStatus(); 
+    }
+
+    // ฟังก์ชันสั่งไฟกระพริบทำงาน
+    function refreshMenuStatus() {
+      if (!userProfile.fullName || userProfile.role === "Observer") return; // แอดมินไม่ต้องกระพริบ
+      
+      fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'get_user_status', fullName: userProfile.fullName }) })
+        .then(r => r.json()).then(res => {
+           if (res.success) {
+             var mCheckin = document.getElementById('menuCheckin');
+             var mTask = document.getElementById('menuTaskpool');
+             
+             // 1. ถ้ายังไม่ตอกบัตร ให้กระพริบสีเขียวรัวๆ
+             if (mCheckin) res.isCheckedIn ? mCheckin.classList.remove('alert-blink-green') : mCheckin.classList.add('alert-blink-green');
+             
+             // 2. ถ้ามีงานเข้า (และตอกบัตรแล้ว) ให้กระพริบสีส้มรัวๆ
+             if (mTask) res.hasActiveTasks ? mTask.classList.add('alert-blink-orange') : mTask.classList.remove('alert-blink-orange');
+           }
+        });
+    }
     function showLoading(t="รอสักครู่") { document.getElementById('loadingOverlay').classList.add('active'); }
     function hideLoading() { document.getElementById('loadingOverlay').classList.remove('active'); }
     function showToast(msg, type="success") { var t = document.getElementById('toast'); t.innerText = msg; t.className = `toast ${type} show`; setTimeout(() => t.classList.remove('show'), 3000); }
