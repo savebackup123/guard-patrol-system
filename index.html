@@ -616,6 +616,26 @@
            }
         });
     }
+
+    // ฟังก์ชันสั่งไฟกระพริบทำงาน
+    function refreshMenuStatus() {
+      if (!userProfile.fullName || userProfile.role === "Observer") return; // แอดมินไม่ต้องกระพริบ
+      
+      fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'get_user_status', fullName: userProfile.fullName }) })
+        .then(r => r.json()).then(res => {
+           if (res.success) {
+             var mCheckin = document.getElementById('menuCheckin');
+             var mTask = document.getElementById('menuTaskpool');
+             
+             // 1. ถ้ายังไม่ตอกบัตร ให้กระพริบสีเขียวเรียกร้องความสนใจ
+             if (mCheckin) res.isCheckedIn ? mCheckin.classList.remove('alert-blink-green') : mCheckin.classList.add('alert-blink-green');
+             
+             // 2. ถ้าตอกบัตรแล้ว และมีงานค้างอยู่ ค่อยกระพริบสีส้ม
+             if (mTask) (res.isCheckedIn && res.hasActiveTasks) ? mTask.classList.add('alert-blink-orange') : mTask.classList.remove('alert-blink-orange');
+           }
+        }).catch(err => console.error("Status check failed", err)); // กันแอปค้างถ้าเน็ตหลุด
+    }
+    
     function showLoading(t="รอสักครู่") { document.getElementById('loadingOverlay').classList.add('active'); }
     function hideLoading() { document.getElementById('loadingOverlay').classList.remove('active'); }
     function showToast(msg, type="success") { var t = document.getElementById('toast'); t.innerText = msg; t.className = `toast ${type} show`; setTimeout(() => t.classList.remove('show'), 3000); }
