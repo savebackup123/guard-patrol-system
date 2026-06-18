@@ -620,7 +620,7 @@
     // ฟังก์ชันสั่งไฟกระพริบทำงาน (อัปเดต: อนุญาตแอดมิน VIP)
     function refreshMenuStatus() {
       // 1. กำหนดคีย์เวิร์ดชื่อแอดมินที่อนุญาตให้เห็นไฟกระพริบ (ใส่ชื่อเล่น หรือบางส่วนของชื่อก็ได้)
-      var vipNames = ["โม", "วรากร", "Minnie การละคร"]; 
+      var vipNames = ["โม", "วรากร", "Minnie การละคร", "ตาล"]; 
       var isVip = vipNames.some(name => userProfile.fullName.includes(name) || userProfile.displayName.includes(name));
 
       // 2. ถ้าไม่มีชื่อ หรือ (เป็น Observer และไม่ใช่ VIP ที่กำหนด) ให้หยุดการทำงาน
