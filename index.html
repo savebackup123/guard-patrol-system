@@ -389,13 +389,17 @@
     function renderTasks() {
       var html = '';
       currentTasks.forEach(t => {
-        var sc = t.status === 'Active' ? 'active' : t.status === 'Completed' ? 'completed' : 'missed';
+        // จัดการกรอบสีของการ์ด (ถ้าเป็น Test ให้ใช้กรอบสีเหลืองเหมือน Active)
+        var sc = t.status === 'Active' ? 'active' : 
+                 t.status === 'Completed' ? 'completed' : 
+                 t.status === 'Test' ? 'active' : 
+                 'missed';
         
-        // ⚡ รอรับสถานะ Failed จากหลังบ้านตรงๆ
-        // ⚡ แก้ให้ดักรอคำว่า 'Failed' แทนคำว่า 'F'
+        // ⚡ เพิ่มการดักจับสถานะ Test เพื่อโชว์ข้อความเตือน
         var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : 
                  t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : 
-                 (t.status === 'Rejected' || t.status === 'Failed') ? '<span style="color:var(--danger)">❌ ภาพผิดภารกิจ</span>' : 
+                 t.status === 'Test' ? '<span style="color:var(--warn)">⚠️ เตือน (ภาพผิดแต่เป็นช่วงทดลองระบบ)</span>' : 
+                 t.status === 'Failed' ? '<span style="color:var(--danger)">❌ ภาพผิดภารกิจ</span>' : 
                  '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>';
         
         var btn = '';
