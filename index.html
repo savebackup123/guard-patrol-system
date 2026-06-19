@@ -392,9 +392,10 @@
         var sc = t.status === 'Active' ? 'active' : t.status === 'Completed' ? 'completed' : 'missed';
         
         // ⚡ รอรับสถานะ Failed จากหลังบ้านตรงๆ
+        // ⚡ แก้ให้ดักรอคำว่า 'Failed' แทนคำว่า 'F'
         var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : 
                  t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : 
-                 t.status === 'Failed' ? '<span style="color:var(--danger)">❌ ภาพผิดภารกิจ</span>' : 
+                 (t.status === 'Rejected' || t.status === 'Failed') ? '<span style="color:var(--danger)">❌ ภาพผิดภารกิจ</span>' : 
                  '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>';
         
         var btn = '';
