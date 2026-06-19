@@ -601,47 +601,41 @@
       if (id === 'mainMenu') refreshMenuStatus(); 
     }
 
-    // ฟังก์ชันสั่งไฟกระพริบทำงาน
-    function refreshMenuStatus() {
-      if (!userProfile.fullName || userProfile.role === "Observer") return; // แอดมินไม่ต้องกระพริบ
-      
-      fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'get_user_status', fullName: userProfile.fullName }) })
-        .then(r => r.json()).then(res => {
-           if (res.success) {
-             var mCheckin = document.getElementById('menuCheckin');
-             var mTask = document.getElementById('menuTaskpool');
-             
-             // 1. ถ้ายังไม่ตอกบัตร ให้กระพริบสีเขียวรัวๆ
-             if (mCheckin) res.isCheckedIn ? mCheckin.classList.remove('alert-blink-green') : mCheckin.classList.add('alert-blink-green');
-             
-             // 2. ถ้ามีงานเข้า (และตอกบัตรแล้ว) ให้กระพริบสีส้มรัวๆ
-             if (mTask) res.hasActiveTasks ? mTask.classList.add('alert-blink-orange') : mTask.classList.remove('alert-blink-orange');
-           }
-        });
-    }
-
     // ฟังก์ชันสั่งไฟกระพริบทำงาน (อัปเดต: อนุญาตแอดมิน VIP)
     function refreshMenuStatus() {
-      // 1. กำหนดคีย์เวิร์ดชื่อแอดมินที่อนุญาตให้เห็นไฟกระพริบ (ใส่ชื่อเล่น หรือบางส่วนของชื่อก็ได้)
-      var vipNames = ["โม", "วรากร", "Minnie การละคร", "ตาล"]; 
-      var isVip = vipNames.some(name => userProfile.fullName.includes(name) || userProfile.displayName.includes(name));
+      // ⚡ ใส่เกราะกันบัคขั้นสุดยอด และ แยกลอจิกแอดมินกับ รปภ.
+      try {
+        var vipNames = ["โม", "วรากร", "Minnie การละคร", "ตาล"];
+        var fName = userProfile.fullName || ""; 
+        var dName = userProfile.displayName || "";
+        var isVip = vipNames.some(name => fName.includes(name) || dName.includes(name));
+        var isObs = userProfile.role === "Observer";
 
-      // 2. ถ้าไม่มีชื่อ หรือ (เป็น Observer และไม่ใช่ VIP ที่กำหนด) ให้หยุดการทำงาน
-      if (!userProfile.fullName || (userProfile.role === "Observer" && !isVip)) return;
-      
-      fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'get_user_status', fullName: userProfile.fullName }) })
-        .then(r => r.json()).then(res => {
-           if (res.success) {
-             var mCheckin = document.getElementById('menuCheckin');
-             var mTask = document.getElementById('menuTaskpool');
-             
-             // ไฟเขียว: ถ้ายังไม่ตอกบัตร ให้กระพริบ
-             if (mCheckin) res.isCheckedIn ? mCheckin.classList.remove('alert-blink-green') : mCheckin.classList.add('alert-blink-green');
-             
-             // ไฟส้ม: ถ้าตอกบัตรแล้ว และมีงานค้าง ค่อยกระพริบ
-             if (mTask) (res.isCheckedIn && res.hasActiveTasks) ? mTask.classList.add('alert-blink-orange') : mTask.classList.remove('alert-blink-orange');
-           }
-        }).catch(err => console.error("Status check failed", err));
+        // ถ้าไม่มีชื่อ หรือ (เป็นแอดมินแต่ไม่ใช่ VIP) ให้ข้ามไป ไม่ต้องโชว์ไฟกระพริบ
+        if (!fName || (isObs && !isVip)) return;
+
+        fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'get_user_status', fullName: fName }) })
+          .then(r => r.json()).then(res => {
+             if (res.success) {
+               var mCheckin = document.getElementById('menuCheckin');
+               var mTask = document.getElementById('menuTaskpool');
+               
+               // 🟢 1. จัดการไฟสีเขียว (เข้างาน)
+               // ถ้าเป็นแอดมิน (Observer) ให้ปิดไฟสีเขียวถาวรไปเลย / แต่ถ้าเป็น รปภ. ต้องดูว่าตอกบัตรหรือยัง
+               if (mCheckin) {
+                 if (isObs || res.isCheckedIn) mCheckin.classList.remove('alert-blink-green');
+                 else mCheckin.classList.add('alert-blink-green');
+               }
+               
+               // 🟠 2. จัดการไฟสีส้ม (ภารกิจค้าง)
+               // แอดมิน (VIP) เห็นไฟส้มทันทีที่มีงานค้าง / ส่วน รปภ. ต้องตอกบัตรเข้างานแล้วถึงจะเห็นไฟส้ม
+               if (mTask) {
+                 var showOrange = isObs ? res.hasActiveTasks : (res.isCheckedIn && res.hasActiveTasks);
+                 showOrange ? mTask.classList.add('alert-blink-orange') : mTask.classList.remove('alert-blink-orange');
+               }
+             }
+          }).catch(e => console.log("Status check failed"));
+      } catch(err) { console.log("Menu status logic error", err); }
     }
     
     function showLoading(t="รอสักครู่") { document.getElementById('loadingOverlay').classList.add('active'); }
