@@ -389,30 +389,27 @@
     function renderTasks() {
       var html = '';
       currentTasks.forEach(t => {
-        // จัดการกรอบสีของการ์ด (ถ้าเป็น Test ให้ใช้กรอบสีเหลืองเหมือน Active)
+        // ⚡ เพิ่มสถานะ Break ให้มีกรอบสีเขียวเหมือนทำงานสำเร็จไปเลย
         var sc = t.status === 'Active' ? 'active' : 
                  t.status === 'Completed' ? 'completed' : 
                  t.status === 'Test' ? 'active' : 
+                 t.status === 'Break' ? 'completed' : 
                  'missed';
         
-        // ⚡ เพิ่มการดักจับสถานะ Test เพื่อโชว์ข้อความเตือน
+        // ⚡ ดักจับสถานะ Break เพื่อโชว์คำบรรยายพิเศษ
         var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : 
                  t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : 
                  t.status === 'Test' ? '<span style="color:var(--warn)">⚠️ เตือน (ภาพผิดแต่เป็นช่วงทดลองระบบ)</span>' : 
+                 t.status === 'Break' ? '<span style="color:var(--accent)">☕ พัก ภารกิจจะมาทุกๆ 2 ชั่วโมงหลังจากนี้(ควงกะ)</span>' : 
                  t.status === 'Failed' ? '<span style="color:var(--danger)">❌ ภาพผิดภารกิจ</span>' : 
                  '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>';
         
         var btn = '';
         if (t.status === 'Active') {
             var stagedImgs = stagedTaskImages[t.rowIdx] || [];
-            
-            var previewHtml = stagedImgs.length > 0 ? 
-              `<div class="task-imgs" style="margin-bottom:10px">${stagedImgs.map((b64, idx) => `<img src="${b64}" onclick="removeStagedImage(${t.rowIdx}, ${idx})" style="border-color:var(--warn)">`).join('')}</div>
-               <div style="font-size:11px; color:var(--warn); margin-bottom:10px;">* จิ้มที่รูปเพื่อลบทิ้งได้</div>` : '';
-            
+            var previewHtml = stagedImgs.length > 0 ? `<div class="task-imgs" style="margin-bottom:10px">${stagedImgs.map((b64, idx) => `<img src="${b64}" onclick="removeStagedImage(${t.rowIdx}, ${idx})" style="border-color:var(--warn)">`).join('')}</div><div style="font-size:11px; color:var(--warn); margin-bottom:10px;">* จิ้มที่รูปเพื่อลบทิ้งได้</div>` : '';
             var addBtnText = stagedImgs.length > 0 ? "📸 ถ่ายรูปเพิ่ม" : "📸 ถ่ายรูปสถานที่จริง";
-            var submitBtn = stagedImgs.length > 0 ? 
-              `<button class="btn btn-success" style="margin-top:10px; width:100%" onclick="submitStagedTasks(${t.rowIdx})">✅ ยืนยันส่งงาน (${stagedImgs.length} รูป)</button>` : '';
+            var submitBtn = stagedImgs.length > 0 ? `<button class="btn btn-success" style="margin-top:10px; width:100%" onclick="submitStagedTasks(${t.rowIdx})">✅ ยืนยันส่งงาน (${stagedImgs.length} รูป)</button>` : '';
 
             btn = `${previewHtml}
                    <div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">${addBtnText}</div>
