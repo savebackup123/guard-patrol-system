@@ -248,98 +248,75 @@
         await liff.init({ liffId: "2010387823-I2Kotz77" });
         if (!liff.isLoggedIn()) return liff.login();
         var p = await liff.getProfile();
-        userProfile.userId = p.userId;
-        userProfile.displayName = p.displayName || "Unknown";
-        document.getElementById('headerSub').textContent = userProfile.displayName;
+        userProfile.userId = p.userId; userProfile.displayName = p.displayName;
+        document.getElementById('headerSub').textContent = p.displayName;
+        
+        getGPS(); checkRegistration();
       } catch (e) {
-        showToast("โหมดเบราว์เซอร์ปกติ", "warn");
+        showToast("LIFF Error: โหมดทดสอบ", "error"); getGPS(); checkRegistration();
       }
-
-      var hasCache = false;
-      try {
-        var cached = localStorage.getItem("mdf_guard_profile");
-        if (cached) {
-          var cData = JSON.parse(cached);
-          if (cData && cData.role) {
-            userProfile.role = cData.role;
-            userProfile.fullName = cData.fullName || ""; // ⚡ กันบัคชื่อว่าง
-            userProfile.nickname = cData.nickname || "";
-            if (cData.role === "Observer") document.getElementById('roleBadge').style.display = "block";
-            showSection('mainMenu');
-            hasCache = true;
-          }
-        }
-      } catch (err) {}
-
-      getGPS();
-      checkRegistrationBackground(hasCache);
     }
 
-    function checkRegistrationBackground(hasCache) {
-      if (!hasCache) showLoading("กำลังเชื่อมต่อข้อมูล...");
-
-      fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'register', userId: userProfile.userId, displayName: userProfile.displayName }) })
-        .then(r => r.json())
-        .then(res => {
-          if (!hasCache) hideLoading();
-          if (res.isRegistered) {
-            userProfile.role = res.role;
-            userProfile.fullName = res.fullName || "";
-            userProfile.nickname = res.nickname || "";
-
-            try { localStorage.setItem("mdf_guard_profile", JSON.stringify(res)); } catch(e){}
-
-            if (res.role === "Observer") document.getElementById('roleBadge').style.display = "block";
-            if (!hasCache) showSection('mainMenu');
-          } else {
-            try { localStorage.removeItem("mdf_guard_profile"); } catch(e){}
-            showSection('regSec');
+    function getGPS() {
+      if(navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => { 
+            currentLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude }; 
+            document.getElementById('gpsStatus').innerHTML = "📍 รับพิกัดสำเร็จ ("+currentLoc.lat.toFixed(4)+")"; 
+            fetchBookingStatus(); 
+            sendAccessLog(); 
+          },
+          err => { 
+            document.getElementById('gpsStatus').innerHTML = "❌ ไม่สามารถรับ GPS ได้ กรุณาเปิด Location"; 
+            fetchBookingStatus(); 
+            sendAccessLog(); 
           }
-        }).catch(err => {
-          if (!hasCache) hideLoading();
-          showToast("เน็ตขัดข้อง หรือเซิร์ฟเวอร์ไม่ตอบสนอง", "error");
-          
-          // ⚡ ป้องกันจอดำ: ถ้าพังให้โชว์ปุ่มรีเฟรชแทน
-          if (!hasCache) {
-            document.getElementById('taskList').innerHTML = `<div style="text-align:center;padding:40px 20px;color:var(--danger)">❌ ขัดข้อง: ไม่สามารถเชื่อมต่อฐานข้อมูลได้<br><br><button class="btn btn-primary" onclick="location.reload()">🔄 กดเพื่อลองใหม่</button></div>`;
-            showSection('taskpoolSec'); 
-          }
+        );
+      } else {
+        sendAccessLog();
+      }
+    }
+
+    function sendAccessLog() {
+      setTimeout(function() {
+        fetch(GAS_URL, { 
+          method: "POST", 
+          body: JSON.stringify({ 
+            type: 'log_access', 
+            userId: userProfile.userId, 
+            displayName: userProfile.displayName, 
+            fullName: userProfile.fullName, 
+            role: userProfile.role || "Guard", // ✅ กัน Role ว่าง
+            lat: currentLoc?.lat, 
+            lng: currentLoc?.lng 
+          }) 
         });
+      }, 2000);
+    }
+
+    function apiCall(payload) {
+      showLoading();
+      return fetch(GAS_URL, { method: "POST", body: JSON.stringify(payload) }).then(r => r.json()).finally(() => hideLoading());
+    }
+
+    function checkRegistration() {
+      apiCall({ type: 'register', userId: userProfile.userId, displayName: userProfile.displayName }).then(res => {
+        if (res.isRegistered) {
+          userProfile.role = res.role; userProfile.fullName = res.fullName; userProfile.nickname = res.nickname;
+          if(res.role === "Observer") document.getElementById('roleBadge').style.display = "block";
+          showSection('mainMenu');
+        } else showSection('regSec');
+      });
     }
 
     function submitRegistration() {
       var n = document.getElementById('regName').value, nk = document.getElementById('regNick').value;
       if(!n || !nk) return showToast("กรอกข้อมูลให้ครบ", "error");
-      showLoading("กำลังลงทะเบียน...");
       apiCall({ type: 'register', userId: userProfile.userId, displayName: userProfile.displayName, fullName: n, nickname: nk }).then(res => {
-        hideLoading();
         userProfile.role = res.role; userProfile.fullName = n; userProfile.nickname = nk;
-        try { localStorage.setItem("mdf_guard_profile", JSON.stringify(res)); } catch(e){}
         if(res.role === "Observer") document.getElementById('roleBadge').style.display = "block";
         showSection('mainMenu'); showToast("ลงทะเบียนสำเร็จ");
       });
-    }
-
-    function refreshMenuStatus() {
-      // ⚡ ใส่เกราะกันบัคขั้นสุดยอดให้ระบบไฟกระพริบ
-      try {
-        var vipNames = ["โม", "วรากร", "Minnie การละคร", "ตาล"];
-        var fName = userProfile.fullName || ""; 
-        var dName = userProfile.displayName || "";
-        var isVip = vipNames.some(name => fName.includes(name) || dName.includes(name));
-
-        if (!fName || (userProfile.role === "Observer" && !isVip)) return;
-
-        fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'get_user_status', fullName: fName }) })
-          .then(r => r.json()).then(res => {
-             if (res.success) {
-               var mCheckin = document.getElementById('menuCheckin');
-               var mTask = document.getElementById('menuTaskpool');
-               if (mCheckin) res.isCheckedIn ? mCheckin.classList.remove('alert-blink-green') : mCheckin.classList.add('alert-blink-green');
-               if (mTask) (res.isCheckedIn && res.hasActiveTasks) ? mTask.classList.add('alert-blink-orange') : mTask.classList.remove('alert-blink-orange');
-             }
-          }).catch(e => console.log("Status check failed"));
-      } catch(err) { console.log("Menu status logic error", err); }
     }
 
     function submitCheckIn(action) {
