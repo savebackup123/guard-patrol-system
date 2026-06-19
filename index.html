@@ -244,38 +244,41 @@
     var currentIssueB64 = "";    // เพิ่มบรรทัดนี้เผื่อไว้สำหรับเมนูแจ้งเหตุ
 
     async function init() {
+      // 1. ส่วนเชื่อมต่อ LINE
       try {
         await liff.init({ liffId: "2010387823-I2Kotz77" });
         if (!liff.isLoggedIn()) return liff.login();
         var p = await liff.getProfile();
         userProfile.userId = p.userId; userProfile.displayName = p.displayName;
         document.getElementById('headerSub').textContent = p.displayName;
+      } catch (e) {
+        showToast("โหมดทดสอบ / เข้าจากเบราว์เซอร์", "warn");
+      }
 
-        // ⚡ 1. ดึงข้อมูลประวัติจากหน่วยความจำมือถือ (Local Storage)
+      // 2. ส่วนดึงความจำมือถือ (⚡ ใส่เกราะป้องกันมือถือบล็อก)
+      var hasCache = false;
+      try {
         var cached = localStorage.getItem("mdf_guard_profile");
         if (cached) {
           var cData = JSON.parse(cached);
-          userProfile.role = cData.role;
-          userProfile.fullName = cData.fullName;
-          userProfile.nickname = cData.nickname;
-          if (cData.role === "Observer") document.getElementById('roleBadge').style.display = "block";
-          showSection('mainMenu'); // โชว์หน้าเมนูทันที ไม่ต้องรอโหลด!
+          if (cData && cData.role) {
+            userProfile.role = cData.role;
+            userProfile.fullName = cData.fullName;
+            userProfile.nickname = cData.nickname;
+            if (cData.role === "Observer") document.getElementById('roleBadge').style.display = "block";
+            showSection('mainMenu'); // โชว์เมนูทันที
+            hasCache = true;
+          }
         }
+      } catch (err) { console.log("Storage blocked by device"); }
 
-        // ⚡ 2. สั่งรันพิกัด GPS เบื้องหลัง (ไม่รบกวนหน้าจอ)
-        getGPS(); 
-        
-        // ⚡ 3. เช็กสถานะกับเซิร์ฟเวอร์เบื้องหลังแบบไม่บังจอ
-        checkRegistrationBackground(cached ? true : false);
-
-      } catch (e) {
-        showToast("LIFF Error: โหมดทดสอบ", "error"); getGPS(); checkRegistrationBackground(false);
-      }
+      // 3. รันพิกัด และเช็กหลังบ้าน
+      getGPS(); 
+      checkRegistrationBackground(hasCache);
     }
 
-    // ⚡ ฟังก์ชันเช็กสถานะแบบแอบทำเบื้องหลัง (Background Sync)
     function checkRegistrationBackground(hasCache) {
-      if (!hasCache) showLoading("กำลังเข้าสู่ระบบ..."); // โชว์หน้าโหลดเฉพาะคนที่เข้าแอปครั้งแรกสุด
+      if (!hasCache) showLoading("กำลังเข้าสู่ระบบ..."); 
       
       fetch(GAS_URL, { method: "POST", body: JSON.stringify({ type: 'register', userId: userProfile.userId, displayName: userProfile.displayName }) })
         .then(r => r.json())
@@ -283,23 +286,32 @@
           if (!hasCache) hideLoading();
           if (res.isRegistered) {
             userProfile.role = res.role; userProfile.fullName = res.fullName; userProfile.nickname = res.nickname;
-            localStorage.setItem("mdf_guard_profile", JSON.stringify(res)); // อัปเดตความจำลงมือถือ
+            
+            // ⚡ ใส่เกราะตอนเขียนข้อมูลลงเครื่อง
+            try { localStorage.setItem("mdf_guard_profile", JSON.stringify(res)); } catch(e){} 
+            
             if (res.role === "Observer") document.getElementById('roleBadge').style.display = "block";
-            if (!hasCache) showSection('mainMenu');
+            if (!hasCache) showSection('mainMenu'); // บังคับโชว์เมนู
           } else {
-            localStorage.removeItem("mdf_guard_profile"); // เคลียร์ความจำทิ้งถ้าโดนแอดมินลบสิทธิ์
+            // ⚡ ใส่เกราะตอนลบข้อมูล
+            try { localStorage.removeItem("mdf_guard_profile"); } catch(e){} 
             showSection('regSec');
           }
-        }).catch(err => { if (!hasCache) hideLoading(); });
+        }).catch(err => { 
+          if (!hasCache) hideLoading(); 
+          showToast("เชื่อมต่อเซิร์ฟเวอร์ล้มเหลว", "error");
+        });
     }
 
-    // ⚡ ปรับปรุงการลงทะเบียนให้จำข้อมูลลงมือถือทันที
     function submitRegistration() {
       var n = document.getElementById('regName').value, nk = document.getElementById('regNick').value;
       if(!n || !nk) return showToast("กรอกข้อมูลให้ครบ", "error");
       apiCall({ type: 'register', userId: userProfile.userId, displayName: userProfile.displayName, fullName: n, nickname: nk }).then(res => {
         userProfile.role = res.role; userProfile.fullName = n; userProfile.nickname = nk;
-        localStorage.setItem("mdf_guard_profile", JSON.stringify(res)); // ⚡ บันทึกจำไว้ในเครื่องทันที
+        
+        // ⚡ ใส่เกราะตอนจำข้อมูลผู้ใช้ใหม่
+        try { localStorage.setItem("mdf_guard_profile", JSON.stringify(res)); } catch(e){} 
+        
         if(res.role === "Observer") document.getElementById('roleBadge').style.display = "block";
         showSection('mainMenu'); showToast("ลงทะเบียนสำเร็จ");
       });
