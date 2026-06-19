@@ -389,13 +389,12 @@
     function renderTasks() {
       var html = '';
       currentTasks.forEach(t => {
-        // จัดการกรอบสีของการ์ด
         var sc = t.status === 'Active' ? 'active' : t.status === 'Completed' ? 'completed' : 'missed';
         
-        // ⚡ ส่วนที่แก้ไข: ให้แอปหน้าบ้านดักจับคำว่า Failed (ที่แปลงร่างมาจาก F ของหลังบ้าน)
+        // ⚡ รอรับสถานะ Failed จากหลังบ้านตรงๆ
         var st = t.status === 'Active' ? '<span style="color:var(--warn)">🟢 กำลังดำเนินการ</span>' : 
                  t.status === 'Completed' ? '<span style="color:var(--accent2)">✅ สำเร็จ</span>' : 
-                 (t.status === 'Rejected' || t.status === 'Failed') ? '<span style="color:var(--danger)">❌ ภาพผิดภารกิจ</span>' : 
+                 t.status === 'Failed' ? '<span style="color:var(--danger)">❌ ภาพผิดภารกิจ</span>' : 
                  '<span style="color:var(--danger)">❌ หมดเวลา/ละทิ้ง</span>';
         
         var btn = '';
