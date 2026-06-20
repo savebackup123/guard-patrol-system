@@ -270,9 +270,11 @@
             document.getElementById('gpsStatus').innerHTML = "❌ ไม่สามารถรับ GPS ได้ กรุณาเปิด Location"; 
             fetchBookingStatus(); 
             sendAccessLog(); 
-          }
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
       } else {
+        fetchBookingStatus();
         sendAccessLog();
       }
     }
@@ -296,7 +298,14 @@
 
     function apiCall(payload) {
       showLoading();
-      return fetch(GAS_URL, { method: "POST", body: JSON.stringify(payload) }).then(r => r.json()).finally(() => hideLoading());
+      return fetch(GAS_URL, { method: "POST", body: JSON.stringify(payload) })
+        .then(r => r.json())
+        .catch(err => {
+          console.error("API Call error:", err);
+          showToast("เชื่อมต่อเซิร์ฟเวอร์ล้มเหลว ❌", "error");
+          return { success: false, message: "เชื่อมต่อล้มเหลว" };
+        })
+        .finally(() => hideLoading());
     }
 
     function checkRegistration() {
@@ -409,7 +418,7 @@
             var stagedImgs = stagedTaskImages[t.rowIdx] || [];
             var previewHtml = stagedImgs.length > 0 ? `<div class="task-imgs" style="margin-bottom:10px">${stagedImgs.map((b64, idx) => `<img src="${b64}" onclick="removeStagedImage(${t.rowIdx}, ${idx})" style="border-color:var(--warn)">`).join('')}</div><div style="font-size:11px; color:var(--warn); margin-bottom:10px;">* จิ้มที่รูปเพื่อลบทิ้งได้</div>` : '';
             var addBtnText = stagedImgs.length > 0 ? "📸 ถ่ายรูปเพิ่ม" : "📸 ถ่ายรูปสถานที่จริง";
-            var submitBtn = stagedImgs.length > 0 ? `<button class="btn btn-success" style="margin-top:10px; width:100%" onclick="submitStagedTasks(${t.rowIdx})">✅ ยืนยันส่งงาน (${stagedImgs.length} รูป)</button>` : '';
+            var submitBtn = stagedImgs.length > 0 ? `<button class="btn btn-success" style="margin-top:10px; width:100%" onclick="submitStagedTasks(${t.rowIdx}, '${t.taskId || ''}')">✅ ยืนยันส่งงาน (${stagedImgs.length} รูป)</button>` : '';
 
             btn = `${previewHtml}
                    <div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">${addBtnText}</div>
@@ -430,12 +439,15 @@
       
       showLoading("กำลังตรวจสอบเวลาภาพถ่าย...");
       
-      // 1. ตรวจสอบข้อมูล EXIF ของภาพ
+      // 1. ตรวจสอบว่ามีห้องสมุด EXIF หรือไม่
+      if (typeof EXIF === "undefined") {
+        processImageFile(file, rowIdx, new Date(file.lastModified));
+        return;
+      }
+
       EXIF.getData(file, function() {
         var dateStr = EXIF.getTag(this, "DateTimeOriginal");
         var takenDate;
-        var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
         if (dateStr) {
           var parts     = dateStr.split(' ');
           var dateParts = parts[0].split(':');
@@ -443,40 +455,48 @@
           takenDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]),
                                parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2]));
         } else {
-          if (isIOS) { takenDate = new Date(file.lastModified); } 
-          else { hideLoading(); showToast("ไม่อนุญาตให้ใช้รูปแคปหน้าจอ ถ่ายสดเท่านั้น ❌", "error"); input.value = ""; return; }
+          takenDate = new Date(file.lastModified);
         }
-
-        var diffMinutes  = Math.abs(new Date() - takenDate) / (1000 * 60);
-        if (diffMinutes > 5) {
-          hideLoading(); showToast("รูปภาพเก่าเกินไป (" + Math.floor(diffMinutes) + " นาทีที่แล้ว) ถ่ายใหม่ ❌", "error");
-          input.value = ""; return;
-        }
-
-        // 2. ถ้ารูปผ่านเกณฑ์เวลา ให้นำมาย่อขนาดด้วย Canvas เพื่อป้องกันแอปค้าง
-        var r = new FileReader();
-        r.onload = e => {
-          var img = new Image();
-          img.onload = function() {
-            var MAX_W  = 800;
-            var scale  = Math.min(1, MAX_W / img.width);
-            var canvas = document.createElement('canvas');
-            canvas.width  = Math.round(img.width  * scale);
-            canvas.height = Math.round(img.height * scale);
-            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-            var b64 = canvas.toDataURL('image/jpeg', 0.72); // บีบอัดเหลือ 72%
-
-            // 3. นำรูปที่ย่อแล้วไปพักไว้เตรียมส่ง
-            if (!stagedTaskImages[rowIdx]) stagedTaskImages[rowIdx] = [];
-            stagedTaskImages[rowIdx].push(b64);
-            input.value = ""; 
-            renderTasks(); 
-            hideLoading();
-          };
-          img.src = e.target.result;
-        }
-        r.readAsDataURL(file);
+        processImageFile(file, rowIdx, takenDate);
       });
+    }
+
+    function processImageFile(file, rowIdx, takenDate) {
+      var diffMinutes  = Math.abs(new Date() - takenDate) / (1000 * 60);
+      if (diffMinutes > 5) {
+        hideLoading(); 
+        showToast("รูปภาพเก่าเกินไป (" + Math.floor(diffMinutes) + " นาทีที่แล้ว) ถ่ายใหม่ ❌", "error");
+        document.getElementById('file_' + rowIdx).value = "";
+        return;
+      }
+
+      // 2. ถ้ารูปผ่านเกณฑ์เวลา ให้นำมาย่อขนาดด้วย Canvas เพื่อป้องกันแอปค้าง
+      var r = new FileReader();
+      r.onload = e => {
+        var img = new Image();
+        img.onload = function() {
+          var MAX_W  = 800;
+          var scale  = Math.min(1, MAX_W / img.width);
+          var canvas = document.createElement('canvas');
+          canvas.width  = Math.round(img.width  * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          var b64 = canvas.toDataURL('image/jpeg', 0.72); // บีบอัดเหลือ 72%
+
+          // 3. นำรูปที่ย่อแล้วไปพักไว้เตรียมส่ง
+          if (!stagedTaskImages[rowIdx]) stagedTaskImages[rowIdx] = [];
+          stagedTaskImages[rowIdx].push(b64);
+          document.getElementById('file_' + rowIdx).value = ""; 
+          renderTasks(); 
+          hideLoading();
+        };
+        img.onerror = function() {
+          hideLoading();
+          showToast("โหลดรูปภาพไม่สำเร็จ ❌", "error");
+        };
+        img.src = e.target.result;
+      }
+      r.readAsDataURL(file);
     }
 
     // ฟังก์ชันลบรูปที่ถ่ายพลาด
@@ -488,14 +508,14 @@
     }
 
     // ฟังก์ชันส่งรูปทั้งหมดรวดเดียว
-    function submitStagedTasks(rowIdx) {
+    function submitStagedTasks(rowIdx, taskId) {
       var images = stagedTaskImages[rowIdx];
       if(!images || images.length === 0) return showToast("กรุณาถ่ายรูปก่อนส่ง", "error");
       if(!currentLoc && userProfile.role !== "Observer") return showToast("รอ GPS ก่อนส่ง", "error");
       
       showLoading("กำลังอัปโหลด " + images.length + " รูป...");
       
-      apiCall({ type: 'submit_task', rowIdx: rowIdx, lat: currentLoc?.lat, lng: currentLoc?.lng, images: images, fullName: userProfile.fullName, role: userProfile.role || "Guard" })
+      apiCall({ type: 'submit_task', rowIdx: rowIdx, taskId: taskId, lat: currentLoc?.lat, lng: currentLoc?.lng, images: images, fullName: userProfile.fullName, role: userProfile.role || "Guard" })
         .then(res => { 
           showToast(res.message, res.success ? "success" : "error"); 
           if(res.success) {
