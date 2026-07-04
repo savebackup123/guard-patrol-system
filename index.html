@@ -646,6 +646,13 @@
         }
         
         var reading = parseFloat(integerNum + "." + String(decVal).padStart(2, "0"));
+        
+        // ⚡ ตรวจสอบว่าค่าน้ำต้องไม่น้อยกว่าเมื่อวาน (ป้องกันการพิมพ์ตกหลัก หรือพิมพ์มั่ว)
+        var prevVal = lastWaterReadings[v] || 0;
+        if (prevVal > 0 && reading < prevVal) {
+          return showToast("❌ เลขมาตรน้ำของ " + v + " (" + reading.toFixed(2) + ") น้อยกว่าเมื่อวาน (" + prevVal.toFixed(2) + ") กรุณาตรวจสอบตัวเลขหลักสีดำอีกครั้ง", "error");
+        }
+        
         readings.push({ villa: v, reading: reading, image: stagedWaterImages[v] });
       }
       
