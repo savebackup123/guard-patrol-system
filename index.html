@@ -244,6 +244,7 @@
     var currentIssueB64 = "";    // เพิ่มบรรทัดนี้เผื่อไว้สำหรับเมนูแจ้งเหตุ
     var lastWaterReadings = {};  // เก็บข้อมูลค่าน้ำล่าสุดของวิลล่าแต่ละหลัง
     var showWaterGuide = false;  // สถานะการเปิด/ปิดคำแนะนำการอ่านมิเตอร์
+    var stagedWaterImages = {};  // เก็บรูปถ่ายมาตรน้ำแต่ละวิลล่า
 
     async function init() {
       try {
@@ -472,16 +473,30 @@
                     // หากมีแบบร่างพิมพ์ค้างไว้ ให้ดึงค่าร่างมาใส่ แต่ถ้าไม่มีให้ปล่อยว่าง (บังคับพิมพ์เอง ห้ามใช้เลขเดิมอัตโนมัติเพื่อกันยามลักไก่)
                     var valInt = (draft[v] && draft[v].int !== undefined) ? draft[v].int : "";
                     var valDec = (draft[v] && draft[v].dec !== undefined) ? draft[v].dec : "";
+                    var isImgStaged = stagedWaterImages[v] ? true : false;
                     
-                    formHtml += `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; border-bottom:1px dashed var(--border); padding-bottom:10px;">
-                                   <div style="font-weight:bold; width:45px;">${v}</div>
-                                   <div style="display:flex; align-items:center; gap:4px;">
-                                     <input type="number" id="water_int_${v}" value="${valInt}" placeholder="${maskedInt}" oninput="saveWaterDraft('${t.taskId || ''}')" style="width:75px; text-align:right; margin-bottom:0; padding:6px; font-weight:bold;" min="0">
-                                     <span style="font-weight:bold; font-size:18px; line-height:1;">.</span>
-                                     <input type="number" id="water_dec_${v}" value="${valDec}" placeholder="xx" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2); saveWaterDraft('${t.taskId || ''}');" style="width:45px; margin-bottom:0; padding:6px; color:var(--warn); font-weight:bold;" min="0" max="99">
+                    formHtml += `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; border-bottom:1px dashed var(--border); padding-bottom:10px; flex-wrap:wrap; gap:6px;">
+                                   <div style="font-weight:bold; width:35px;">${v}</div>
+                                   
+                                   <!-- ส่วนกรอกตัวเลข -->
+                                   <div style="display:flex; align-items:center; gap:2px;">
+                                     <input type="number" id="water_int_${v}" value="${valInt}" placeholder="${maskedInt}" oninput="saveWaterDraft('${t.taskId || ''}')" style="width:68px; text-align:right; margin-bottom:0; padding:6px; font-weight:bold;" min="0">
+                                     <span style="font-weight:bold; font-size:16px; line-height:1;">.</span>
+                                     <input type="number" id="water_dec_${v}" value="${valDec}" placeholder="xx" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2); saveWaterDraft('${t.taskId || ''}');" style="width:38px; margin-bottom:0; padding:6px; color:var(--warn); font-weight:bold;" min="0" max="99">
                                    </div>
-                                   <div style="font-size:11px; color:var(--text-muted); text-align:right; width:130px;">
-                                     เมื่อวาน: <span style="font-family:var(--mono); letter-spacing:1px;">${maskedValueText}</span>
+                                   
+                                   <!-- ปุ่มถ่ายภาพประกอบและตัวดูภาพตัวอย่าง -->
+                                   <div style="display:flex; align-items:center; gap:4px;">
+                                     <button class="btn" style="padding:4px 8px; font-size:11px; margin:0; width:auto; background:${isImgStaged ? 'var(--accent2)' : 'var(--surface)'}; border:1px solid ${isImgStaged ? 'var(--accent2)' : 'var(--border)'}; color:var(--text);" onclick="document.getElementById('water_file_${v}').click()">
+                                       📸 ${isImgStaged ? 'ถ่ายแล้ว' : 'ถ่ายรูป'}
+                                     </button>
+                                     <input type="file" id="water_file_${v}" accept="image/*" capture="environment" style="display:none" onchange="stageWaterImage(this, '${v}', '${t.taskId || ''}')">
+                                     ${isImgStaged ? `<img src="${stagedWaterImages[v]}" style="width:28px; height:28px; object-fit:cover; border-radius:4px; border:1px solid var(--accent2); cursor:pointer;" onclick="window.open('${stagedWaterImages[v]}')">` : ''}
+                                   </div>
+                                   
+                                   <!-- ตัวช่วยไกด์ไลน์ด้านหลังสุด -->
+                                   <div style="font-size:11px; color:var(--text-muted); text-align:right; width:75px;">
+                                     เมื่อวาน: <span style="font-family:var(--mono); letter-spacing:0.5px;">${maskedValueText}</span>
                                    </div>
                                  </div>`;
                 });
@@ -626,13 +641,17 @@
           return showToast("กรุณากรอกตัวเลขมาตรน้ำของ " + v + " ให้ถูกต้อง (ทศนิยมต้องมีค่าระหว่าง 00-99)", "error");
         }
         
+        if (!stagedWaterImages[v]) {
+          return showToast("กรุณาถ่ายรูปมาตรน้ำของวิลล่า " + v + " ประกอบด้วยครับเพื่อเป็นหลักฐานในการตรวจสอบ", "error");
+        }
+        
         var reading = parseFloat(integerNum + "." + String(decVal).padStart(2, "0"));
-        readings.push({ villa: v, reading: reading });
+        readings.push({ villa: v, reading: reading, image: stagedWaterImages[v] });
       }
       
       if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนส่งรายงาน", "error");
       
-      showLoading("กำลังส่งบันทึกมาตรน้ำ...");
+      showLoading("กำลังส่งบันทึกมาตรน้ำและอัปโหลดรูปมาตรน้ำ...");
       apiCall({
         type: 'submit_water',
         rowIdx: rowIdx,
@@ -646,9 +665,72 @@
         showToast(res.message, res.success ? "success" : "error");
         if(res.success) {
           localStorage.removeItem('water_readings_draft'); // ล้างแบบร่างหลังจากส่งสำเร็จ
+          stagedWaterImages = {}; // ล้างรูปที่พักไว้ทั้งหมด
           openTaskpool();
         }
       });
+    }
+
+    function stageWaterImage(input, villa, taskId) {
+      if(!input.files.length) return;
+      var file = input.files[0];
+      
+      showLoading("กำลังตรวจสอบเวลาภาพถ่ายมาตรน้ำ " + villa + "...");
+      
+      if (typeof EXIF === "undefined") {
+        processWaterImageFile(file, villa, new Date(file.lastModified));
+        return;
+      }
+
+      EXIF.getData(file, function() {
+        var dateStr = EXIF.getTag(this, "DateTimeOriginal");
+        var takenDate;
+        if (dateStr) {
+          var parts     = dateStr.split(' ');
+          var dateParts = parts[0].split(':');
+          var timeParts = parts[1].split(':');
+          takenDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]),
+                               parseInt(timeParts[0]), parseInt(timeParts[1]), parseInt(timeParts[2]));
+        } else {
+          takenDate = new Date(file.lastModified);
+        }
+        processWaterImageFile(file, villa, takenDate);
+      });
+    }
+
+    function processWaterImageFile(file, villa, takenDate) {
+      var diffMinutes  = Math.abs(new Date() - takenDate) / (1000 * 60);
+      if (diffMinutes > 5) {
+        hideLoading(); 
+        showToast("รูปภาพเก่าเกินไป (" + Math.floor(diffMinutes) + " นาทีที่แล้ว) ถ่ายใหม่ ❌", "error");
+        document.getElementById('water_file_' + villa).value = "";
+        return;
+      }
+
+      var r = new FileReader();
+      r.onload = e => {
+        var img = new Image();
+        img.onload = function() {
+          var MAX_W  = 1600; // ตั้งค่าความละเอียดสูง 1600px เพื่อให้ผู้ดูแลระบบสามารถซูมอ่านรายละเอียดหน้าปัดน้ำได้ชัดเจน
+          var scale  = Math.min(1, MAX_W / img.width);
+          var canvas = document.createElement('canvas');
+          canvas.width  = Math.round(img.width  * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          var b64 = canvas.toDataURL('image/jpeg', 0.85); // บีบอัดระดับ 85% เพื่อความคมชัดสูงสำหรับซูมตรวจจับไอน้ำ
+
+          stagedWaterImages[villa] = b64;
+          document.getElementById('water_file_' + villa).value = ""; 
+          renderTasks(); 
+          hideLoading();
+        };
+        img.onerror = function() {
+          hideLoading();
+          showToast("โหลดรูปภาพไม่สำเร็จ ❌", "error");
+        };
+        img.src = e.target.result;
+      }
+      r.readAsDataURL(file);
     }
 
     function saveWaterDraft(taskId) {
