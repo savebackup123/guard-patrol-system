@@ -242,6 +242,8 @@
     var currentTasks = [];       // เพิ่มบรรทัดนี้
     var stagedTaskImages = {};   // เพิ่มบรรทัดนี้
     var currentIssueB64 = "";    // เพิ่มบรรทัดนี้เผื่อไว้สำหรับเมนูแจ้งเหตุ
+    var lastWaterReadings = {};  // เก็บข้อมูลค่าน้ำล่าสุดของวิลล่าแต่ละหลัง
+    var showWaterGuide = false;  // สถานะการเปิด/ปิดคำแนะนำการอ่านมิเตอร์
 
     async function init() {
       try {
@@ -384,14 +386,22 @@
     function openTaskpool() {
       if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนเข้าดูข้อมูล", "error");
       showSection('taskpoolSec'); 
-      apiCall({ type: 'get_tasks', lat: currentLoc?.lat, lng: currentLoc?.lng, role: userProfile.role || "Guard" }).then(res => {
-        if(res.success) {
-          currentTasks = res.tasks;
-          renderTasks(); // ใช้วิธีเรนเดอร์ UI เพื่อไม่ให้ต้องโหลดหน้าใหม่ทุกครั้งที่ถ่ายรูป
-        } else {
-          showToast(res.message, "error");
-          showSection('mainMenu'); 
+      
+      // ดึงค่าน้ำย้อนหลังมาก่อนเพื่อให้พร้อมแสดงคู่กับช่องกรอก
+      apiCall({ type: 'get_prev_water' }).then(waterRes => {
+        if (waterRes.success) {
+          lastWaterReadings = waterRes.data;
         }
+        
+        apiCall({ type: 'get_tasks', lat: currentLoc?.lat, lng: currentLoc?.lng, role: userProfile.role || "Guard" }).then(res => {
+          if(res.success) {
+            currentTasks = res.tasks;
+            renderTasks(); // ใช้วิธีเรนเดอร์ UI เพื่อไม่ให้ต้องโหลดหน้าใหม่ทุกครั้งที่ถ่ายรูป
+          } else {
+            showToast(res.message, "error");
+            showSection('mainMenu'); 
+          }
+        });
       });
     }
 
@@ -415,15 +425,55 @@
         
         var btn = '';
         if (t.status === 'Active') {
-            var stagedImgs = stagedTaskImages[t.rowIdx] || [];
-            var previewHtml = stagedImgs.length > 0 ? `<div class="task-imgs" style="margin-bottom:10px">${stagedImgs.map((b64, idx) => `<img src="${b64}" onclick="removeStagedImage(${t.rowIdx}, ${idx})" style="border-color:var(--warn)">`).join('')}</div><div style="font-size:11px; color:var(--warn); margin-bottom:10px;">* จิ้มที่รูปเพื่อลบทิ้งได้</div>` : '';
-            var addBtnText = stagedImgs.length > 0 ? "📸 ถ่ายรูปเพิ่ม" : "📸 ถ่ายรูปสถานที่จริง";
-            var submitBtn = stagedImgs.length > 0 ? `<button class="btn btn-success" style="margin-top:10px; width:100%" onclick="submitStagedTasks(${t.rowIdx}, '${t.taskId || ''}')">✅ ยืนยันส่งงาน (${stagedImgs.length} รูป)</button>` : '';
+            if (t.taskName.indexOf("บันทึกมาตรน้ำวิลล่า") !== -1) {
+                // เรนเดอร์ฟอร์มกรอกเลขน้ำแบบแยกส่วน
+                var villas = ["V1", "V2", "V3", "V5", "V6", "V7", "V8"];
+                var formHtml = `<div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; margin: 10px 0;">
+                                  <button class="btn btn-ghost" style="margin-top:0; margin-bottom:12px; padding:6px 12px; font-size:12px; width:auto; display:inline-flex;" onclick="toggleWaterGuide()">❓ วิธีอ่านค่ามาตรน้ำ</button>
+                                  <div id="waterGuideCard" style="display:none; background:var(--surface); border:1px dashed var(--border); border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px; line-height:1.4; color:var(--text); text-align:left;">
+                                    <div style="font-weight:bold; color:var(--warn); margin-bottom:4px; display:flex; justify-content:space-between;">
+                                      <span>คู่มือการอ่านมิเตอร์น้ำ 💧</span>
+                                      <span onclick="toggleWaterGuide()" style="cursor:pointer; color:var(--text-muted);">[ปิด]</span>
+                                    </div>
+                                    <p><b>• มิเตอร์ TAYO (หลัง V1, V2, V5, V6, V7, V8)</b>: กรอกเลขสี่เหลี่ยมดำ 5 หลักในช่องแรก และดูเข็มวงกลมขวามือบนสุด (ตำแหน่งแรก) และวงถัดมาด้านขวา (ตำแหน่งสอง) กรอกลงช่องทศนิยม</p>
+                                    <p style="color:var(--accent2); margin-top:2px;"><i>ตัวอย่าง V2: เลขดำ 1000 ทศนิยม 83 -> กรอก [ 1000 ] . [ 83 ]</i></p>
+                                    <p style="margin-top:6px;"><b>• มิเตอร์ ATACO (หลัง V3)</b>: กรอกเลขดำ 4 หลักแรกในช่องแรก และเลขแดง 2 หลักในช่องทศนิยมได้เลย</p>
+                                    <p style="color:var(--accent2); margin-top:2px;"><i>ตัวอย่าง V3: เลขดำ 2980 ทศนิยม 40 -> กรอก [ 2980 ] . [ 40 ]</i></p>
+                                  </div>`;
+                
+                villas.forEach(function(v) {
+                    var prevVal = lastWaterReadings[v] || 0;
+                    var prevStr = parseFloat(prevVal).toFixed(2);
+                    var prevParts = prevStr.split(".");
+                    var prevInt = prevParts[0];
+                    var prevDec = prevParts[1];
+                    
+                    formHtml += `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; border-bottom:1px dashed var(--border); padding-bottom:10px;">
+                                   <div style="font-weight:bold; width:45px;">${v}</div>
+                                   <div style="display:flex; align-items:center; gap:4px;">
+                                     <input type="number" id="water_int_${v}" value="${prevInt}" style="width:75px; text-align:right; margin-bottom:0; padding:6px; font-weight:bold;" min="0">
+                                     <span style="font-weight:bold; font-size:18px; line-height:1;">.</span>
+                                     <input type="number" id="water_dec_${v}" value="${prevDec}" style="width:45px; margin-bottom:0; padding:6px; color:var(--warn); font-weight:bold;" min="0" max="99" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);">
+                                   </div>
+                                   <div style="font-size:11px; color:var(--text-muted); text-align:right; width:130px;">
+                                     เมื่อวาน: <span style="font-family:var(--mono);">${prevInt}.${prevDec}</span>
+                                   </div>
+                                 </div>`;
+                });
+                
+                formHtml += `<button class="btn btn-success" style="margin-top:8px; width:100%;" onclick="submitWaterMeter(${t.rowIdx}, '${t.taskId || ''}')">✅ ส่งข้อมูลและคํานวณยอดน้ำ</button></div>`;
+                btn = formHtml;
+            } else {
+                var stagedImgs = stagedTaskImages[t.rowIdx] || [];
+                var previewHtml = stagedImgs.length > 0 ? `<div class="task-imgs" style="margin-bottom:10px">${stagedImgs.map((b64, idx) => `<img src="${b64}" onclick="removeStagedImage(${t.rowIdx}, ${idx})" style="border-color:var(--warn)">`).join('')}</div><div style="font-size:11px; color:var(--warn); margin-bottom:10px;">* จิ้มที่รูปเพื่อลบทิ้งได้</div>` : '';
+                var addBtnText = stagedImgs.length > 0 ? "📸 ถ่ายรูปเพิ่ม" : "📸 ถ่ายรูปสถานที่จริง";
+                var submitBtn = stagedImgs.length > 0 ? `<button class="btn btn-success" style="margin-top:10px; width:100%" onclick="submitStagedTasks(${t.rowIdx}, '${t.taskId || ''}')">✅ ยืนยันส่งงาน (${stagedImgs.length} รูป)</button>` : '';
 
-            btn = `${previewHtml}
-                   <div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">${addBtnText}</div>
-                   ${submitBtn}
-                   <input type="file" id="file_${t.rowIdx}" accept="image/*" capture="environment" style="display:none" onchange="stageTaskImage(this, ${t.rowIdx})">`;
+                btn = `${previewHtml}
+                       <div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">${addBtnText}</div>
+                       ${submitBtn}
+                       <input type="file" id="file_${t.rowIdx}" accept="image/*" capture="environment" style="display:none" onchange="stageTaskImage(this, ${t.rowIdx})">`;
+            }
         }
 
         var imgs = t.images && t.images.length ? `<div class="task-imgs">${t.images.map(url => `<img src="${url}" onclick="window.open('${url.replace('s200','s1600')}')">`).join('')}</div>` : '';
@@ -523,6 +573,56 @@
             openTaskpool(); // โหลดข้อมูลกระดานงานใหม่จากเซิร์ฟเวอร์
           }
         });
+    }
+
+    function toggleWaterGuide() {
+      showWaterGuide = !showWaterGuide;
+      var card = document.getElementById('waterGuideCard');
+      if (card) card.style.display = showWaterGuide ? 'block' : 'none';
+    }
+
+    function submitWaterMeter(rowIdx, taskId) {
+      var villas = ["V1", "V2", "V3", "V5", "V6", "V7", "V8"];
+      var readings = [];
+      
+      for (var i = 0; i < villas.length; i++) {
+        var v = villas[i];
+        var intVal = document.getElementById("water_int_" + v).value;
+        var decVal = document.getElementById("water_dec_" + v).value;
+        
+        if (intVal === "" || decVal === "") {
+          return showToast("กรุณากรอกตัวเลขมาตรน้ำของ " + v + " ให้ครบถ้วน ทั้งเลขดำและทศนิยม", "error");
+        }
+        
+        var integerNum = parseInt(intVal, 10);
+        var decimalNum = parseInt(decVal, 10);
+        
+        if (isNaN(integerNum) || integerNum < 0 || isNaN(decimalNum) || decimalNum < 0 || decimalNum > 99) {
+          return showToast("กรุณากรอกตัวเลขมาตรน้ำของ " + v + " ให้ถูกต้อง (ทศนิยมต้องมีค่าระหว่าง 00-99)", "error");
+        }
+        
+        var reading = parseFloat(integerNum + "." + String(decVal).padStart(2, "0"));
+        readings.push({ villa: v, reading: reading });
+      }
+      
+      if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนส่งรายงาน", "error");
+      
+      showLoading("กำลังส่งบันทึกมาตรน้ำ...");
+      apiCall({
+        type: 'submit_water',
+        rowIdx: rowIdx,
+        taskId: taskId,
+        lat: currentLoc?.lat,
+        lng: currentLoc?.lng,
+        readings: readings,
+        fullName: userProfile.fullName,
+        role: userProfile.role || "Guard"
+      }).then(res => {
+        showToast(res.message, res.success ? "success" : "error");
+        if(res.success) {
+          openTaskpool();
+        }
+      });
     }
 
     function openDashboard() {
