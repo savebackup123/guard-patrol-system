@@ -426,6 +426,18 @@
         var btn = '';
         if (t.status === 'Active') {
             if (t.taskName.indexOf("บันทึกมาตรน้ำวิลล่า") !== -1) {
+                // โหลดแบบร่างเก่า (ถ้ามี) เฉพาะถ้ารหัสงานเดียวกัน
+                var draft = {};
+                try {
+                  var draftStr = localStorage.getItem('water_readings_draft');
+                  if (draftStr) {
+                    var draftData = JSON.parse(draftStr);
+                    if (draftData && draftData.taskId === t.taskId) {
+                      draft = draftData.readings;
+                    }
+                  }
+                } catch(e) {}
+
                 // เรนเดอร์ฟอร์มกรอกเลขน้ำแบบแยกส่วน
                 var villas = ["V1", "V2", "V3", "V5", "V6", "V7", "V8"];
                 var formHtml = `<div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; margin: 10px 0;">
@@ -448,12 +460,15 @@
                     var prevInt = prevParts[0];
                     var prevDec = prevParts[1];
                     
+                    var valInt = (draft[v] && draft[v].int !== undefined) ? draft[v].int : prevInt;
+                    var valDec = (draft[v] && draft[v].dec !== undefined) ? draft[v].dec : prevDec;
+                    
                     formHtml += `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; border-bottom:1px dashed var(--border); padding-bottom:10px;">
                                    <div style="font-weight:bold; width:45px;">${v}</div>
                                    <div style="display:flex; align-items:center; gap:4px;">
-                                     <input type="number" id="water_int_${v}" value="${prevInt}" style="width:75px; text-align:right; margin-bottom:0; padding:6px; font-weight:bold;" min="0">
+                                     <input type="number" id="water_int_${v}" value="${valInt}" oninput="saveWaterDraft('${t.taskId || ''}')" style="width:75px; text-align:right; margin-bottom:0; padding:6px; font-weight:bold;" min="0">
                                      <span style="font-weight:bold; font-size:18px; line-height:1;">.</span>
-                                     <input type="number" id="water_dec_${v}" value="${prevDec}" style="width:45px; margin-bottom:0; padding:6px; color:var(--warn); font-weight:bold;" min="0" max="99" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);">
+                                     <input type="number" id="water_dec_${v}" value="${valDec}" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2); saveWaterDraft('${t.taskId || ''}');" style="width:45px; margin-bottom:0; padding:6px; color:var(--warn); font-weight:bold;" min="0" max="99">
                                    </div>
                                    <div style="font-size:11px; color:var(--text-muted); text-align:right; width:130px;">
                                      เมื่อวาน: <span style="font-family:var(--mono);">${prevInt}.${prevDec}</span>
@@ -620,9 +635,31 @@
       }).then(res => {
         showToast(res.message, res.success ? "success" : "error");
         if(res.success) {
+          localStorage.removeItem('water_readings_draft'); // ล้างแบบร่างหลังจากส่งสำเร็จ
           openTaskpool();
         }
       });
+    }
+
+    function saveWaterDraft(taskId) {
+      var villas = ["V1", "V2", "V3", "V5", "V6", "V7", "V8"];
+      var readings = {};
+      villas.forEach(function(v) {
+        var intEl = document.getElementById("water_int_" + v);
+        var decEl = document.getElementById("water_dec_" + v);
+        if (intEl && decEl) {
+          readings[v] = {
+            int: intEl.value,
+            dec: decEl.value
+          };
+        }
+      });
+      try {
+        localStorage.setItem('water_readings_draft', JSON.stringify({
+          taskId: taskId,
+          readings: readings
+        }));
+      } catch(e) {}
     }
 
     function openDashboard() {
