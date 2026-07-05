@@ -498,7 +498,10 @@
                   if (draftStr) {
                     var draftData = JSON.parse(draftStr);
                     if (draftData && draftData.taskId === t.taskId) {
-                      draft = draftData.readings;
+                      draft = draftData.readings || {};
+                      stagedWaterImages = draftData.stagedWaterImages || {};
+                      waterMeterRetries = draftData.waterMeterRetries || {};
+                      aiReadingsState = draftData.aiReadingsState || {};
                     }
                   }
                 } catch(e) {}
@@ -784,6 +787,8 @@
 
     function stageWaterImage(input, villa, taskId) {
       if(!input.files.length) return;
+      activeCameraVilla = villa;
+      activeCameraTaskId = taskId;
       var file = input.files[0];
       
       showLoading("กำลังตรวจสอบเวลาภาพถ่ายมาตรน้ำ " + villa + "...");
@@ -831,6 +836,7 @@
           var b64 = canvas.toDataURL('image/jpeg', 0.85); // บีบอัดระดับ 85% เพื่อความคมชัดสูงสำหรับซูมตรวจจับไอน้ำ
 
           stagedWaterImages[villa] = b64;
+          saveWaterDraft(activeCameraTaskId); // Save photo state!
           document.getElementById('water_file_' + villa).value = ""; 
           
           // เรียกใช้งานกระบวนการ AI ประมวลผลภาพ
@@ -902,6 +908,7 @@
       closeCustomCamera();
       
       stagedWaterImages[activeCameraVilla] = b64;
+      saveWaterDraft(activeCameraTaskId); // Save photo state!
       renderTasks();
       
       // เรียกใช้งาน AI ทันทีหลังกดถ่ายภาพ
@@ -932,7 +939,7 @@
           };
           var roundedVal = Math.floor(res.value);
           document.getElementById("water_int_" + villa).value = roundedVal;
-          saveWaterDraft(null); // เซฟแบบร่าง
+          saveWaterDraft(activeCameraTaskId); // เซฟแบบร่าง
           showToast("🤖 AI อ่านสำเร็จ: " + res.value.toFixed(2), "success");
         } else {
           var reasonStr = res.reason || res.message || "ภาพไม่ชัดเจน/มีสิ่งกีดขวาง";
@@ -944,6 +951,8 @@
           
           if (!waterMeterRetries[villa]) waterMeterRetries[villa] = 0;
           waterMeterRetries[villa]++;
+          
+          saveWaterDraft(activeCameraTaskId); // เซฟแบบร่าง
           
           if (waterMeterRetries[villa] > 1) {
             showToast("⚠️ AI ยังคงอ่านไม่ได้หลังถ่ายซ่อม: " + reasonStr + " (ระบบจะบันทึกค่าน้ำทศนิยม .00 ให้อัตโนมัติ)", "warn");
@@ -974,13 +983,20 @@
         var existingStr = localStorage.getItem('water_readings_draft');
         var tid = taskId;
         if (!tid && existingStr) {
-          tid = JSON.parse(existingStr).taskId;
+          try {
+            tid = JSON.parse(existingStr).taskId;
+          } catch(e) {}
         }
         localStorage.setItem('water_readings_draft', JSON.stringify({
           taskId: tid,
-          readings: readings
+          readings: readings,
+          stagedWaterImages: stagedWaterImages,
+          waterMeterRetries: waterMeterRetries,
+          aiReadingsState: aiReadingsState
         }));
-      } catch(e) {}
+      } catch(e) {
+        console.error("Failed to save draft to localStorage:", e);
+      }
     }
 
     function openDashboard() {
