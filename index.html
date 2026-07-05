@@ -470,13 +470,14 @@
                                   <button class="btn btn-ghost" style="margin-top:0; margin-bottom:12px; padding:6px 12px; font-size:12px; width:auto; display:inline-flex;" onclick="toggleWaterGuide()">❓ วิธีอ่านค่ามาตรน้ำ</button>
                                   <div id="waterGuideCard" style="display:none; background:var(--surface); border:1px dashed var(--border); border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px; line-height:1.4; color:var(--text); text-align:left;">
                                     <div style="font-weight:bold; color:var(--warn); margin-bottom:4px; display:flex; justify-content:space-between;">
-                                      <span>คู่มือการอ่านมิเตอร์น้ำ 💧</span>
+                                      <span>คู่มือการสแกนมาตรน้ำด้วย AI 💧</span>
                                       <span onclick="toggleWaterGuide()" style="cursor:pointer; color:var(--text-muted);">[ปิด]</span>
                                     </div>
-                                    <p><b>• มิเตอร์ TAYO (หลัง V1, V2, V5, V6, V7, V8)</b>: กรอกเลขสี่เหลี่ยมดำ 5 หลักในช่องแรก และดูเข็มวงกลมขวามือบนสุด (ตำแหน่งแรก) และวงถัดมาด้านขวา (ตำแหน่งสอง) กรอกลงช่องทศนิยม</p>
-                                    <p style="color:var(--accent2); margin-top:2px;"><i>ตัวอย่าง V2: เลขดำ 1000 ทศนิยม 83 -> กรอก [ 1000 ] . [ 83 ]</i></p>
-                                    <p style="margin-top:6px;"><b>• มิเตอร์ ATACO (หลัง V3)</b>: กรอกเลขดำ 4 หลักแรกในช่องแรก และเลขแดง 2 หลักในช่องทศนิยมได้เลย</p>
-                                    <p style="color:var(--accent2); margin-top:2px;"><i>ตัวอย่าง V3: เลขดำ 2980 ทศนิยม 40 -> กรอก [ 2980 ] . [ 40 ]</i></p>
+                                    <p><b>• ขั้นตอนการทำงาน</b>: กดปุ่มถ่ายรูป เล็งหน้าปัดให้อยู่ในกรอบวงกลม แล้วกดชัตเตอร์ ระบบ AI จะทำการสแกนอ่านค่าและป้อนตัวเลขให้โดยอัตโนมัติ</p>
+                                    <p><b>• ตรวจสอบข้อมูล</b>: ตรวจเลขดำ 4 หลักแรกบนหน้าปัดเทียบกับในช่องกรอกข้อมูล หากไม่ตรงกันให้แก้ไขตัวเลขให้ถูกต้องก่อนส่ง</p>
+                                    <p style="color:var(--accent2); margin-top:4px; font-weight:bold; border-top:1px dashed var(--border); padding-top:4px;">
+                                      💡 เคล็ดลับแก้ไอน้ำเกาะ: หากมีไอน้ำหรือหยดน้ำเกาะกระจกจนหน้าปัดมืดมัว ให้ใช้นิ้วเคาะกระจกมาตรน้ำเบาๆ เพื่อให้หยดน้ำ/ไอน้ำขยับตำแหน่งหรือไหลออก แล้วค่อยกดถ่ายรูปครับ
+                                    </p>
                                   </div>`;
                 
                 villas.forEach(function(v) {
@@ -897,7 +898,7 @@
           if (waterMeterRetries[villa] > 1) {
             showToast("⚠️ AI ยังคงอ่านไม่ได้หลังถ่ายซ่อม: " + reasonStr + " (ระบบจะบันทึกค่าน้ำทศนิยม .00 ให้อัตโนมัติ)", "warn");
           } else {
-            showToast("❌ AI อ่านไม่ได้เนื่องจาก: " + reasonStr + "\nโปรดยืนรอถ่ายรูปซ่อมใหม่อีก 1 ครั้งครับ", "error");
+            showToast("❌ AI อ่านไม่ได้เนื่องจาก: " + reasonStr + "\n💡 เคล็ดลับ: ใช้นิ้วเคาะกระจกมาตรน้ำเบาๆ เพื่อให้ไอน้ำขยับตำแหน่งหรือไหลออก แล้วกด 'ถ่ายซ่อม' อีกครั้งครับ", "error");
           }
         }
         renderTasks();
