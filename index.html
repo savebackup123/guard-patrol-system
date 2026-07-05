@@ -487,14 +487,14 @@
                     var prevInt = prevParts[0];
                     var prevDec = prevParts[1];
                     
-                    // สร้างข้อความบอกใบ้ตัวเลขบางส่วนเพื่อไกด์ไลน์ (เช่น 1416.98 -> 14xx.xx)
+                    // สร้างข้อความบอกใบ้ตัวเลขบางส่วนเพื่อไกด์ไลน์ (เช่น 1416.98 -> 14xx)
                     var maskedInt = "";
                     if (prevInt.length <= 2) {
                         maskedInt = prevInt.charAt(0) + "x".repeat(prevInt.length - 1);
                     } else {
                         maskedInt = prevInt.substring(0, 2) + "x".repeat(prevInt.length - 2);
                     }
-                    var maskedValueText = maskedInt + ".xx";
+                    var maskedValueText = maskedInt;
                     
                     // หากมีแบบร่างพิมพ์ค้างไว้ ให้ดึงค่าร่างมาใส่ แต่ถ้าไม่มีให้ปล่อยว่าง (บังคับพิมพ์เอง ห้ามใช้เลขเดิมอัตโนมัติเพื่อกันยามลักไก่)
                     var valInt = (draft[v] && draft[v].int !== undefined) ? draft[v].int : "";
@@ -519,7 +519,7 @@
                                      
                                      <!-- ส่วนกรอกตัวเลข (4 หลักแรกเท่านั้น ไม่ต้องมีทศนิยม) -->
                                      <div style="display:flex; align-items:center; gap:4px;">
-                                       <input type="number" id="water_int_${v}" value="${valInt}" placeholder="4 หลัก" oninput="if(this.value.length > 4) this.value = this.value.slice(0, 4); saveWaterDraft('${t.taskId || ''}');" style="width:75px; text-align:right; margin-bottom:0; padding:6px; font-weight:bold;" min="0" max="9999">
+                                       <input type="number" id="water_int_${v}" value="${valInt}" placeholder="${isImgStaged ? '4 หลัก' : 'ถ่ายรูปก่อน'}" oninput="if(this.value.length > 4) this.value = this.value.slice(0, 4); saveWaterDraft('${t.taskId || ''}');" style="width:75px; text-align:right; margin-bottom:0; padding:6px; font-weight:bold; ${!isImgStaged ? 'background-color: var(--surface2); opacity: 0.6; cursor: not-allowed;' : ''}" min="0" max="9999" ${!isImgStaged ? 'disabled' : ''}>
                                        <span style="font-size:11px; color:var(--text-muted);">(เลขดำ 4 หลัก)</span>
                                      </div>
                                      
