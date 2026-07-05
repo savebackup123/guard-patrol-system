@@ -235,6 +235,26 @@
 
   </div>
 
+  <!-- 📸 หน้าต่างสำหรับเปิดกล้องสดพร้อมไกด์ไลน์วงกลมสแกนมาตรน้ำ (UI/UX พรีเมียมระดับธนาคาร) -->
+  <div id="cameraModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:black; z-index:99999;">
+    <video id="cameraVideo" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+    <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none;">
+      <div style="width:260px; height:260px; border:4px dashed var(--accent2); border-radius:50%; box-shadow:0 0 0 9999px rgba(0,0,0,0.65); position:relative; display:flex; align-items:center; justify-content:center;">
+        <div style="position:absolute; bottom:-60px; left:50%; transform:translateX(-50%); color:white; font-size:12px; font-weight:bold; background:rgba(0,0,0,0.85); padding:8px 16px; border-radius:20px; white-space:nowrap; text-align:center; border:1px solid rgba(255,255,255,0.2);">
+          🎯 เล็งหน้าปัดมาตรน้ำให้อยู่ในกรอบนี้
+        </div>
+      </div>
+    </div>
+    <!-- แถบปุ่มควบคุมการถ่ายรูป -->
+    <div style="position:absolute; bottom:40px; left:0; width:100%; display:flex; justify-content:center; align-items:center; gap:40px; z-index:100000;">
+      <button onclick="closeCustomCamera()" style="background:rgba(255,255,255,0.25); border:1px solid rgba(255,255,255,0.5); color:white; border-radius:50%; width:50px; height:50px; cursor:pointer; font-size:12px; font-weight:bold;">ยกเลิก</button>
+      <button onclick="capturePhoto()" style="background:white; border:none; border-radius:50%; width:72px; height:72px; cursor:pointer; box-shadow:0 6px 15px rgba(0,0,0,0.4); display:flex; justify-content:center; align-items:center;">
+        <div style="width:60px; height:60px; border:2px solid black; border-radius:50%;"></div>
+      </button>
+      <div style="width:50px;"></div> <!-- รักษาสมดุลความกว้างของการจัดตำแหน่ง -->
+    </div>
+  </div>
+
   <script>
     var GAS_URL = "https://script.google.com/macros/s/AKfycbxtB_P4DDH_X2o88spkBpJaL4Kd-fF9yY8ifSEEC-uJ-91DngMVsjlhfUWnOva_q286kQ/exec"; 
     var userProfile = { userId: "U_Mock", displayName: "Test", fullName: "", nickname: "", role: "Guard" }; // ✅ กำหนดค่า Default เผื่อไว้
@@ -245,6 +265,11 @@
     var lastWaterReadings = {};  // เก็บข้อมูลค่าน้ำล่าสุดของวิลล่าแต่ละหลัง
     var showWaterGuide = false;  // สถานะการเปิด/ปิดคำแนะนำการอ่านมิเตอร์
     var stagedWaterImages = {};  // เก็บรูปถ่ายมาตรน้ำแต่ละวิลล่า
+    var waterMeterRetries = {};  // ⚡ เก็บจำนวนครั้งที่ถ่ายซ่อมของแต่ละวิลล่า (ไม่เกิน 1 ครั้ง)
+    var aiReadingsState = {};    // ⚡ เก็บค่าที่ AI อ่านได้สะสมของแต่ละวิลล่า { value, success, reason, integer, decimal }
+    var cameraStream = null;
+    var activeCameraVilla = null;
+    var activeCameraTaskId = null;
 
     async function init() {
       try {
@@ -472,32 +497,46 @@
                     
                     // หากมีแบบร่างพิมพ์ค้างไว้ ให้ดึงค่าร่างมาใส่ แต่ถ้าไม่มีให้ปล่อยว่าง (บังคับพิมพ์เอง ห้ามใช้เลขเดิมอัตโนมัติเพื่อกันยามลักไก่)
                     var valInt = (draft[v] && draft[v].int !== undefined) ? draft[v].int : "";
-                    var valDec = (draft[v] && draft[v].dec !== undefined) ? draft[v].dec : "";
                     var isImgStaged = stagedWaterImages[v] ? true : false;
+                    var retries = waterMeterRetries[v] || 0;
                     
-                    formHtml += `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; border-bottom:1px dashed var(--border); padding-bottom:10px; flex-wrap:wrap; gap:6px;">
-                                   <div style="font-weight:bold; width:35px;">${v}</div>
-                                   
-                                   <!-- ส่วนกรอกตัวเลข -->
-                                   <div style="display:flex; align-items:center; gap:2px;">
-                                     <input type="number" id="water_int_${v}" value="${valInt}" placeholder="${maskedInt}" oninput="saveWaterDraft('${t.taskId || ''}')" style="width:68px; text-align:right; margin-bottom:0; padding:6px; font-weight:bold;" min="0">
-                                     <span style="font-weight:bold; font-size:16px; line-height:1;">.</span>
-                                     <input type="number" id="water_dec_${v}" value="${valDec}" placeholder="xx" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2); saveWaterDraft('${t.taskId || ''}');" style="width:38px; margin-bottom:0; padding:6px; color:var(--warn); font-weight:bold;" min="0" max="99">
+                    // ส่วนแสดงผลลัพธ์ของ AI
+                    var aiStatusHtml = "";
+                    var aiState = aiReadingsState[v];
+                    if (aiState) {
+                      if (aiState.success) {
+                        aiStatusHtml = `<div style="font-size:11px; color:var(--success); margin-top:2px;">🤖 AI อ่านได้: <b>${aiState.value.toFixed(2)}</b> (ใกล้เคียงค่ากรอก)</div>`;
+                      } else {
+                        var retryBtnHtml = (retries < 1) ? ` <span style="color:var(--warn); text-decoration:underline; cursor:pointer;" onclick="openCustomCamera('${v}', '${t.taskId || ''}')">ถ่ายซ่อม</span>` : ` <span style="color:var(--text-muted);">(ถ่ายซ่อมแล้ว ให้ระบุค่าที่อ่านไม่ได้)</span>`;
+                        aiStatusHtml = `<div style="font-size:11px; color:var(--error); margin-top:2px;">🤖 AI อ่านไม่ได้: <b>${aiState.reason}</b>${retryBtnHtml}</div>`;
+                      }
+                    }
+                    
+                    formHtml += `<div style="display:flex; flex-direction:column; margin-bottom:10px; border-bottom:1px dashed var(--border); padding-bottom:10px;">
+                                   <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                                     <div style="font-weight:bold; width:35px;">${v}</div>
+                                     
+                                     <!-- ส่วนกรอกตัวเลข (4 หลักแรกเท่านั้น ไม่ต้องมีทศนิยม) -->
+                                     <div style="display:flex; align-items:center; gap:4px;">
+                                       <input type="number" id="water_int_${v}" value="${valInt}" placeholder="4 หลัก" oninput="if(this.value.length > 4) this.value = this.value.slice(0, 4); saveWaterDraft('${t.taskId || ''}');" style="width:75px; text-align:right; margin-bottom:0; padding:6px; font-weight:bold;" min="0" max="9999">
+                                       <span style="font-size:11px; color:var(--text-muted);">(เลขดำ 4 หลัก)</span>
+                                     </div>
+                                     
+                                     <!-- ปุ่มถ่ายภาพประกอบและตัวดูภาพตัวอย่าง -->
+                                     <div style="display:flex; align-items:center; gap:4px;">
+                                       <button class="btn" style="padding:4px 8px; font-size:11px; margin:0; width:auto; background:${isImgStaged ? 'var(--accent2)' : 'var(--surface)'}; border:1px solid ${isImgStaged ? 'var(--accent2)' : 'var(--border)'}; color:var(--text);" onclick="openCustomCamera('${v}', '${t.taskId || ''}')">
+                                         📸 ${isImgStaged ? 'ถ่ายแล้ว' : 'ถ่ายรูป'}
+                                       </button>
+                                       <input type="file" id="water_file_${v}" accept="image/*" capture="environment" style="display:none" onchange="stageWaterImage(this, '${v}', '${t.taskId || ''}')">
+                                       ${isImgStaged ? `<img src="${stagedWaterImages[v]}" style="width:28px; height:28px; object-fit:cover; border-radius:4px; border:1px solid var(--accent2); cursor:pointer;" onclick="window.open('${stagedWaterImages[v]}')">` : ''}
+                                     </div>
+                                     
+                                     <!-- ตัวช่วยไกด์ไลน์ด้านหลังสุด -->
+                                     <div style="font-size:11px; color:var(--text-muted); text-align:right; width:75px;">
+                                       เมื่อวาน: <span style="font-family:var(--mono); letter-spacing:0.5px;">${maskedValueText}</span>
+                                     </div>
                                    </div>
-                                   
-                                   <!-- ปุ่มถ่ายภาพประกอบและตัวดูภาพตัวอย่าง -->
-                                   <div style="display:flex; align-items:center; gap:4px;">
-                                     <button class="btn" style="padding:4px 8px; font-size:11px; margin:0; width:auto; background:${isImgStaged ? 'var(--accent2)' : 'var(--surface)'}; border:1px solid ${isImgStaged ? 'var(--accent2)' : 'var(--border)'}; color:var(--text);" onclick="document.getElementById('water_file_${v}').click()">
-                                       📸 ${isImgStaged ? 'ถ่ายแล้ว' : 'ถ่ายรูป'}
-                                     </button>
-                                     <input type="file" id="water_file_${v}" accept="image/*" capture="environment" style="display:none" onchange="stageWaterImage(this, '${v}', '${t.taskId || ''}')">
-                                     ${isImgStaged ? `<img src="${stagedWaterImages[v]}" style="width:28px; height:28px; object-fit:cover; border-radius:4px; border:1px solid var(--accent2); cursor:pointer;" onclick="window.open('${stagedWaterImages[v]}')">` : ''}
-                                   </div>
-                                   
-                                   <!-- ตัวช่วยไกด์ไลน์ด้านหลังสุด -->
-                                   <div style="font-size:11px; color:var(--text-muted); text-align:right; width:75px;">
-                                     เมื่อวาน: <span style="font-family:var(--mono); letter-spacing:0.5px;">${maskedValueText}</span>
-                                   </div>
+                                   ${aiStatusHtml}
                                  </div>`;
                 });
                 
@@ -628,29 +667,41 @@
       for (var i = 0; i < villas.length; i++) {
         var v = villas[i];
         var intVal = document.getElementById("water_int_" + v).value;
-        var decVal = document.getElementById("water_dec_" + v).value;
         
-        if (intVal === "" || decVal === "") {
-          return showToast("กรุณากรอกตัวเลขมาตรน้ำของ " + v + " ให้ครบถ้วน ทั้งเลขดำและทศนิยม", "error");
+        if (intVal === "") {
+          return showToast("กรุณากรอกตัวเลขหลักสีดำ (4 หลัก) ของ " + v + " ให้ครบถ้วน", "error");
         }
         
         var integerNum = parseInt(intVal, 10);
-        var decimalNum = parseInt(decVal, 10);
-        
-        if (isNaN(integerNum) || integerNum < 0 || isNaN(decimalNum) || decimalNum < 0 || decimalNum > 99) {
-          return showToast("กรุณากรอกตัวเลขมาตรน้ำของ " + v + " ให้ถูกต้อง (ทศนิยมต้องมีค่าระหว่าง 00-99)", "error");
+        if (isNaN(integerNum) || integerNum < 0 || integerNum > 9999) {
+          return showToast("กรุณากรอกตัวเลขของ " + v + " ให้ถูกต้อง (เป็นจำนวนเต็มบวก 4 หลัก)", "error");
         }
         
         if (!stagedWaterImages[v]) {
-          return showToast("กรุณาถ่ายรูปมาตรน้ำของวิลล่า " + v + " ประกอบด้วยครับเพื่อเป็นหลักฐานในการตรวจสอบ", "error");
+          return showToast("กรุณาถ่ายรูปมาตรน้ำของวิลล่า " + v + " ประกอบด้วยครับ", "error");
         }
         
-        var reading = parseFloat(integerNum + "." + String(decVal).padStart(2, "0"));
+        // ⚡ ดึงผลการอ่านตัวเลขทศนิยมจาก AI
+        var aiState = aiReadingsState[v];
+        var reading = 0.0;
+        
+        if (aiState && aiState.success) {
+          // 1. กรณี AI อ่านสำเร็จ ให้ใช้ค่าทศนิยมของ AI ร่วมกับเลขจำนวนเต็มที่ยามกรอก (ยอมรับการตรวจสอบเบื้องต้นยามบวก/ลบ 1)
+          var aiValueStr = String(aiState.value.toFixed(2));
+          var aiDecStr = aiValueStr.split(".")[1] || "00";
+          reading = parseFloat(integerNum + "." + aiDecStr);
+        } else {
+          // 2. กรณี AI อ่านไม่ได้ แม้จะถ่ายซ่อมแล้ว ให้ป้อนค่าหลักเป็นเลขจำนวนเต็ม.00 เพื่อระบุว่าอ่านทศนิยมไม่ได้ชั่วคราว
+          reading = parseFloat(integerNum + ".00");
+        }
         
         // ⚡ ตรวจสอบว่าค่าน้ำต้องไม่น้อยกว่าเมื่อวาน (ป้องกันการพิมพ์ตกหลัก หรือพิมพ์มั่ว)
         var prevVal = lastWaterReadings[v] || 0;
         if (prevVal > 0 && reading < prevVal) {
-          return showToast("❌ เลขมาตรน้ำของ " + v + " (" + reading.toFixed(2) + ") น้อยกว่าเมื่อวาน (" + prevVal.toFixed(2) + ") กรุณาตรวจสอบตัวเลขหลักสีดำอีกครั้ง", "error");
+          // ปรับปรุงเงื่อนไขเล็กน้อยหากค่าที่ป้อนใกล้เคียง (ยอมรับการกรอก +-1 ของหลักหน่วยและไม่บล็อกรุนแรงหากยามตรวจแล้วว่ามาตรขยับนิดเดียว)
+          if (Math.abs(reading - prevVal) > 5) {
+            return showToast("❌ เลขมาตรน้ำของ " + v + " (" + reading.toFixed(2) + ") น้อยกว่าเมื่อวาน (" + prevVal.toFixed(2) + ") มากเกินไป กรุณาตรวจสอบตัวเลขอีกครั้ง", "error");
+          }
         }
         
         readings.push({ villa: v, reading: reading, image: stagedWaterImages[v] });
@@ -673,6 +724,8 @@
         if(res.success) {
           localStorage.removeItem('water_readings_draft'); // ล้างแบบร่างหลังจากส่งสำเร็จ
           stagedWaterImages = {}; // ล้างรูปที่พักไว้ทั้งหมด
+          waterMeterRetries = {};
+          aiReadingsState = {};
           openTaskpool();
         }
       });
@@ -728,8 +781,9 @@
 
           stagedWaterImages[villa] = b64;
           document.getElementById('water_file_' + villa).value = ""; 
-          renderTasks(); 
-          hideLoading();
+          
+          // เรียกใช้งานกระบวนการ AI ประมวลผลภาพ
+          runAIProcess(b64, villa);
         };
         img.onerror = function() {
           hideLoading();
@@ -740,22 +794,139 @@
       r.readAsDataURL(file);
     }
 
+    // =================================================================
+    //  📸 กล้องสด WebRTC พร้อมไกด์ไลน์ (Overlay Circular Frame)
+    // =================================================================
+    function openCustomCamera(villa, taskId) {
+      activeCameraVilla = villa;
+      activeCameraTaskId = taskId;
+      
+      var modal = document.getElementById("cameraModal");
+      modal.style.display = "block";
+      
+      var constraints = {
+        video: {
+          facingMode: { exact: "environment" }
+        }
+      };
+      
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+          cameraStream = stream;
+          var video = document.getElementById("cameraVideo");
+          video.srcObject = stream;
+          video.play();
+        })
+        .catch(function(err) {
+          // หากเปิดกล้องแบบเจาะจงกล้องหลังโดยตรงไม่สำเร็จ ให้เปิดกล้องทั่วไป
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(function(stream) {
+              cameraStream = stream;
+              var video = document.getElementById("cameraVideo");
+              video.srcObject = stream;
+              video.play();
+            })
+            .catch(function(err2) {
+              // กรณีอุปกรณ์ไม่มีกล้องหลัง หรือสิทธิ์ไม่ผ่าน ให้ fallback ไปกล้องปกติ (File Input Capture)
+              closeCustomCamera();
+              showToast("ไม่สามารถเปิดกล้องสดได้ กำลังเปิดกล้องปกติ...", "warn");
+              document.getElementById('water_file_' + villa).click();
+            });
+        });
+    }
+
+    function capturePhoto() {
+      if (!cameraStream) return;
+      var video = document.getElementById("cameraVideo");
+      var canvas = document.createElement("canvas");
+      
+      // กำหนดความละเอียดพรีเมียม 1280x720 หรือใช้ขนาดจริงของกล้อง
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      
+      var ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      var b64 = canvas.toDataURL('image/jpeg', 0.85); // เซฟเป็น JPEG ความละเอียดสูง
+      
+      closeCustomCamera();
+      
+      stagedWaterImages[activeCameraVilla] = b64;
+      renderTasks();
+      
+      // เรียกใช้งาน AI ทันทีหลังกดถ่ายภาพ
+      runAIProcess(b64, activeCameraVilla);
+    }
+
+    function closeCustomCamera() {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(function(track) { track.stop(); });
+        cameraStream = null;
+      }
+      document.getElementById("cameraModal").style.display = "none";
+    }
+
+    function runAIProcess(b64, villa) {
+      showLoading("🤖 AI กำลังอ่านหน้าปัด โปรดยืนรอสักครู่เผื่อต้องถ่ายรูปซ่อม...");
+      apiCall({
+        type: 'process_water_image_ai',
+        villa: villa,
+        image: b64
+      }).then(res => {
+        hideLoading();
+        if (res.success && res.aiSuccess) {
+          aiReadingsState[villa] = {
+            success: true,
+            value: res.value,
+            reason: null
+          };
+          var roundedVal = Math.floor(res.value);
+          document.getElementById("water_int_" + villa).value = roundedVal;
+          saveWaterDraft(null); // เซฟแบบร่าง
+          showToast("🤖 AI อ่านสำเร็จ: " + res.value.toFixed(2), "success");
+        } else {
+          var reasonStr = res.reason || res.message || "ภาพไม่ชัดเจน/มีสิ่งกีดขวาง";
+          aiReadingsState[villa] = {
+            success: false,
+            value: null,
+            reason: reasonStr
+          };
+          
+          if (!waterMeterRetries[villa]) waterMeterRetries[villa] = 0;
+          waterMeterRetries[villa]++;
+          
+          if (waterMeterRetries[villa] > 1) {
+            showToast("⚠️ AI ยังคงอ่านไม่ได้หลังถ่ายซ่อม: " + reasonStr + " (ระบบจะบันทึกค่าน้ำทศนิยม .00 ให้อัตโนมัติ)", "warn");
+          } else {
+            showToast("❌ AI อ่านไม่ได้เนื่องจาก: " + reasonStr + "\nโปรดยืนรอถ่ายรูปซ่อมใหม่อีก 1 ครั้งครับ", "error");
+          }
+        }
+        renderTasks();
+      }).catch(err => {
+        hideLoading();
+        showToast("ไม่สามารถประมวลผลด้วย AI ได้ชั่วคราว ❌", "error");
+        renderTasks();
+      });
+    }
+
     function saveWaterDraft(taskId) {
       var villas = ["V1", "V2", "V3", "V5", "V6", "V7", "V8"];
       var readings = {};
       villas.forEach(function(v) {
         var intEl = document.getElementById("water_int_" + v);
-        var decEl = document.getElementById("water_dec_" + v);
-        if (intEl && decEl) {
+        if (intEl) {
           readings[v] = {
-            int: intEl.value,
-            dec: decEl.value
+            int: intEl.value
           };
         }
       });
       try {
+        var existingStr = localStorage.getItem('water_readings_draft');
+        var tid = taskId;
+        if (!tid && existingStr) {
+          tid = JSON.parse(existingStr).taskId;
+        }
         localStorage.setItem('water_readings_draft', JSON.stringify({
-          taskId: taskId,
+          taskId: tid,
           readings: readings
         }));
       } catch(e) {}
