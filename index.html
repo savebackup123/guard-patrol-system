@@ -152,6 +152,12 @@
           <div class="menu-icon" style="background:rgba(245,166,35,0.12)">🔦</div>
           <div class="menu-info"><div class="menu-label">ภารกิจเดินตรวจตรา</div><div class="menu-desc">จะมีภารกิจใหม่ทุกๆ XX.30น</div></div>
         </div>
+
+        <div class="menu-card purple" id="menuWaterTest" style="display:none; background: rgba(168,85,247,0.05); border-color: rgba(168,85,247,0.2);" onclick="openWaterTest()">
+          <div class="menu-icon" style="background:rgba(168,85,247,0.12)">🧪</div>
+          <div class="menu-info"><div class="menu-label" style="color: var(--accent3)">ทดลองบันทึกมาตรน้ำ (Test)</div><div class="menu-desc">ทดสอบหน้ากรอกเลขและกล้องวงกลมเล็ง</div></div>
+        </div>
+
         <div class="menu-card purple" onclick="openSchedule()">
           <div class="menu-icon" style="background:rgba(168,85,247,0.12)">🗓️</div>
           <div class="menu-info"><div class="menu-label">ตารางห้องพัก (14 วัน)</div><div class="menu-desc">ข้อมูลคิวบ้านพักวิลล่า</div></div>
@@ -340,7 +346,11 @@
       apiCall({ type: 'register', userId: userProfile.userId, displayName: userProfile.displayName }).then(res => {
         if (res.isRegistered) {
           userProfile.role = res.role; userProfile.fullName = res.fullName; userProfile.nickname = res.nickname;
-          if(res.role === "Observer") document.getElementById('roleBadge').style.display = "block";
+          if(res.role === "Observer") {
+            document.getElementById('roleBadge').style.display = "block";
+            var waterTestBtn = document.getElementById('menuWaterTest');
+            if (waterTestBtn) waterTestBtn.style.display = "flex";
+          }
           showSection('mainMenu');
         } else showSection('regSec');
       });
@@ -351,7 +361,11 @@
       if(!n || !nk) return showToast("กรอกข้อมูลให้ครบ", "error");
       apiCall({ type: 'register', userId: userProfile.userId, displayName: userProfile.displayName, fullName: n, nickname: nk }).then(res => {
         userProfile.role = res.role; userProfile.fullName = n; userProfile.nickname = nk;
-        if(res.role === "Observer") document.getElementById('roleBadge').style.display = "block";
+        if(res.role === "Observer") {
+          document.getElementById('roleBadge').style.display = "block";
+          var waterTestBtn = document.getElementById('menuWaterTest');
+          if (waterTestBtn) waterTestBtn.style.display = "flex";
+        }
         showSection('mainMenu'); showToast("ลงทะเบียนสำเร็จ");
       });
     }
@@ -406,6 +420,31 @@
           showToast(res.message, "error");
           document.getElementById('scheduleListContainer').innerHTML = `<div style="text-align:center;padding:20px;color:var(--danger)">${res.message || "โหลดไม่สำเร็จ"}</div>`;
         }
+      });
+    }
+
+    function openWaterTest() {
+      showSection('taskpoolSec');
+      showLoading("กำลังเข้าสู่โหมดทดสอบ...");
+      
+      // ดึงค่าน้ำย้อนหลังมาก่อนเพื่อให้พร้อมแสดงคู่กับช่องกรอก
+      apiCall({ type: 'get_prev_water' }).then(waterRes => {
+        hideLoading();
+        if (waterRes.success) {
+          lastWaterReadings = waterRes.data;
+        }
+        
+        // จำลองข้อมูลภารกิจบันทึกมาตรน้ำ
+        currentTasks = [{
+          rowIdx: 9999,
+          taskId: "TEST_WATER_TASK",
+          timeLabel: "โหมดทดสอบ",
+          taskName: "บันทึกมาตรน้ำวิลล่า (V1, V2, V3, V5, V6, V7, V8)",
+          status: "Active",
+          images: []
+        }];
+        
+        renderTasks();
       });
     }
 
@@ -707,8 +746,20 @@
         readings.push({ villa: v, reading: reading, image: stagedWaterImages[v] });
       }
       
-      if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนส่งรายงาน", "error");
-      
+      if (taskId === "TEST_WATER_TASK") {
+        showLoading("กำลังจำลองการส่งบันทึกมาตรน้ำ...");
+        setTimeout(function() {
+          hideLoading();
+          showToast("✅ [โหมดทดสอบ] ส่งข้อมูลสำเร็จ! (ไม่บันทึกจริง)", "success");
+          localStorage.removeItem('water_readings_draft');
+          stagedWaterImages = {};
+          waterMeterRetries = {};
+          aiReadingsState = {};
+          showSection('mainMenu');
+        }, 1500);
+        return;
+      }
+
       showLoading("กำลังส่งบันทึกมาตรน้ำและอัปโหลดรูปมาตรน้ำ...");
       apiCall({
         type: 'submit_water',
