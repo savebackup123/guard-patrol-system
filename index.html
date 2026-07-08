@@ -825,8 +825,9 @@
           saveWaterDraft(activeCameraTaskId); // Save photo state!
           document.getElementById('water_file_' + villa).value = ""; 
           
-          // เรียกใช้งานกระบวนการ AI ประมวลผลภาพ
-          runAIProcess(b64, villa);
+          // บันทึกภาพลง Draft และวาดหน้าจอใหม่ทันทีโดยไม่ต้องเรียก AI ในหน้านี้แล้ว
+          renderTasks();
+          hideLoading();
         };
         img.onerror = function() {
           hideLoading();
