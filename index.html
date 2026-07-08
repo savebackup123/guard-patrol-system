@@ -253,6 +253,7 @@
     var lastWaterReadings = {};  // เก็บข้อมูลค่าน้ำล่าสุดของวิลล่าแต่ละหลัง
     var showWaterGuide = false;  // สถานะการเปิด/ปิดคำแนะนำการอ่านมิเตอร์
     var stagedWaterImages = {};  // เก็บรูปถ่ายมาตรน้ำแต่ละวิลล่า
+    var stagedSubmittedVillas = []; // เก็บวิลล่าที่กดส่งข้อมูลสำเร็จแล้วของวันนี้
     var waterMeterRetries = {};  // ⚡ เก็บจำนวนครั้งที่ถ่ายซ่อมของแต่ละวิลล่า (ไม่เกิน 1 ครั้ง)
     var aiReadingsState = {};    // ⚡ เก็บค่าที่ AI อ่านได้สะสมของแต่ละวิลล่า { value, success, reason, integer, decimal }
     var cameraStream = null;
@@ -414,6 +415,7 @@
         hideLoading();
         if (waterRes.success) {
           lastWaterReadings = waterRes.data;
+          stagedSubmittedVillas = waterRes.submittedToday || [];
         }
         
         // จำลองข้อมูลภารกิจบันทึกมาตรน้ำ
@@ -438,6 +440,7 @@
       apiCall({ type: 'get_prev_water' }).then(waterRes => {
         if (waterRes.success) {
           lastWaterReadings = waterRes.data;
+          stagedSubmittedVillas = waterRes.submittedToday || [];
         }
         
         apiCall({ type: 'get_tasks', lat: currentLoc?.lat, lng: currentLoc?.lng, role: userProfile.role || "Guard" }).then(res => {
@@ -491,65 +494,92 @@
                 // เรนเดอร์ฟอร์มกรอกเลขน้ำแบบแยกส่วน
                 var villas = ["V1", "V2", "V3", "V5", "V6", "V7", "V8"];
                 var formHtml = `<div style="background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; margin: 10px 0;">
-                                  <button class="btn btn-ghost" style="margin-top:0; margin-bottom:12px; padding:6px 12px; font-size:12px; width:auto; display:inline-flex;" onclick="toggleWaterGuide()">❓ วิธีอ่านค่ามาตรน้ำ</button>
+                                  <button class="btn btn-ghost" style="margin-top:0; margin-bottom:12px; padding:6px 12px; font-size:12px; width:auto; display:inline-flex;" onclick="toggleWaterGuide()">❓ วิธีส่งค่าน้ำ</button>
                                   <div id="waterGuideCard" style="display:none; background:var(--surface); border:1px dashed var(--border); border-radius:8px; padding:10px; margin-bottom:12px; font-size:12px; line-height:1.4; color:var(--text); text-align:left;">
                                     <div style="font-weight:bold; color:var(--warn); margin-bottom:4px; display:flex; justify-content:space-between;">
-                                      <span>คู่มือการสแกนมาตรน้ำด้วย AI 💧</span>
+                                      <span>คู่มือการส่งรายงานมาตรน้ำ 💧</span>
                                       <span onclick="toggleWaterGuide()" style="cursor:pointer; color:var(--text-muted);">[ปิด]</span>
                                     </div>
-                                    <p><b>• ขั้นตอนการทำงาน</b>: กดปุ่มถ่ายรูป เล็งหน้าปัดให้อยู่ในกรอบวงกลม แล้วกดชัตเตอร์ ระบบ AI จะทำการสแกนอ่านค่าและป้อนตัวเลขให้โดยอัตโนมัติ</p>
-                                    <p><b>• ตรวจสอบข้อมูล</b>: ตรวจเลขดำ 4 หลักแรกบนหน้าปัดเทียบกับในช่องกรอกข้อมูล หากไม่ตรงกันให้แก้ไขตัวเลขให้ถูกต้องก่อนส่ง</p>
+                                    <p><b>• ขั้นตอนการทำงาน</b>: กดปุ่มถ่ายรูป เล็งหน้าปัดของมาตรน้ำให้อยู่ในกรอบวงกลมและให้ตัวเลขหน้าปัดชัดเจนที่สุด จากนั้นกดถ่ายภาพ แล้วกดปุ่มส่งบันทึกได้ทันที</p>
+                                    <p><b>• การประมวลผล</b>: ระบบจะส่งภาพขึ้นระบบเพื่อให้ AI และแอดมินตรวจสอบค่าน้ำและคำนวณยอดการใช้งานรายเดือนโดยอัตโนมัติ</p>
                                     <p style="color:var(--accent2); margin-top:4px; font-weight:bold; border-top:1px dashed var(--border); padding-top:4px;">
                                       💡 เคล็ดลับแก้ไอน้ำเกาะ: หากมีไอน้ำหรือหยดน้ำเกาะกระจกจนหน้าปัดมืดมัว ให้ใช้นิ้วเคาะกระจกมาตรน้ำเบาๆ เพื่อให้หยดน้ำ/ไอน้ำขยับตำแหน่งหรือไหลออก แล้วค่อยกดถ่ายรูปครับ
                                     </p>
                                   </div>`;
                 
                 villas.forEach(function(v) {
-                    var prevVal = lastWaterReadings[v] || 0;
-                    var prevStr = parseFloat(prevVal).toFixed(2);
-                    var prevParts = prevStr.split(".");
-                    var prevInt = prevParts[0];
-                    var prevDec = prevParts[1];
+                    var isSubmitted = stagedSubmittedVillas.includes(v);
+                    var isImgStaged = isSubmitted ? true : (stagedWaterImages[v] ? true : false);
                     
-                    // สร้างข้อความบอกใบ้ตัวเลขบางส่วนเพื่อไกด์ไลน์ (เช่น 1416.98 -> 14xx)
-                    var maskedInt = "";
-                    if (prevInt.length <= 2) {
-                        maskedInt = prevInt.charAt(0) + "x".repeat(prevInt.length - 1);
-                    } else {
-                        maskedInt = prevInt.substring(0, 2) + "x".repeat(prevInt.length - 2);
-                    }
-                    var maskedValueText = maskedInt;
-                    
-                    // หากมีแบบร่างพิมพ์ค้างไว้ ให้ดึงค่าร่างมาใส่ แต่ถ้าไม่มีให้ปล่อยว่าง (บังคับพิมพ์เอง ห้ามใช้เลขเดิมอัตโนมัติเพื่อกันยามลักไก่)
-                    var valInt = (draft[v] && draft[v].int !== undefined) ? draft[v].int : "";
-                    var isImgStaged = stagedWaterImages[v] ? true : false;
-                    var retries = waterMeterRetries[v] || 0;
-                    
-                    // ส่วนแสดงผลลัพธ์ของ AI
-                    var aiStatusHtml = "";
-                    var aiState = aiReadingsState[v];
-                    if (aiState) {
-                      if (aiState.success) {
-                        aiStatusHtml = `<div style="font-size:12px; color:var(--success); font-weight:bold; margin-top:2px;">🤖 AI อ่านได้: <b>${aiState.value.toFixed(2)}</b> (ใกล้เคียงค่ากรอก)</div>`;
-                      } else {
-                        var retryBtnHtml = (retries < 1) ? ` <span style="color:var(--warn); text-decoration:underline; cursor:pointer; font-weight:bold;" onclick="triggerWaterFileInput('${v}', '${t.taskId || ''}')">ถ่ายซ่อม</span>` : ` <span style="color:var(--text-muted);">(ถ่ายซ่อมแล้ว ให้ระบุค่าที่อ่านไม่ได้)</span>`;
-                        aiStatusHtml = `<div style="font-size:12px; color:var(--error); font-weight:bold; margin-top:2px;">🤖 AI อ่านไม่ได้: <b>${aiState.reason}</b>${retryBtnHtml}</div>`;
-                      }
-                    }
+                    var isBtnDisabled = isSubmitted || !isImgStaged;
+                    var btnStyle = isBtnDisabled ? 'background:#718096; opacity:0.6; cursor:not-allowed;' : 'background:linear-gradient(135deg, var(--accent), #2b6cb0);';
                     
                     formHtml += `<div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:14px; text-align:center;">
                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid var(--border); padding-bottom:8px;">
                                      <span style="font-weight:bold; font-size:16px; color:var(--accent2);">${v}</span>
+                                     <span style="font-size:11px; color:var(--text-muted);">สถานะ: ${isSubmitted ? '✅ ส่งแล้ว' : '⏳ รอถ่ายภาพ'}</span>
+                                   </div>
+                                   
+                                   <!-- ช่องถ่ายรูปทรงวงกลมเฉพาะภารกิจนี้ตามดีไซน์ -->
+                                   <div style="display:flex; flex-direction:column; align-items:center; margin:12px 0;">
+                                     <div ${isSubmitted ? '' : `onclick="triggerWaterFileInput('${v}', '${t.taskId || ''}')"`} style="width:160px; height:160px; border-radius:50%; border:3px dashed ${isSubmitted ? 'var(--accent2)' : (isImgStaged ? 'var(--accent2)' : 'var(--accent)')}; background:${isSubmitted ? 'rgba(126, 200, 160, 0.08)' : 'rgba(79, 158, 255, 0.05)'}; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:${isSubmitted ? 'default' : 'pointer'}; position:relative; overflow:hidden; transition:all 0.2s; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
+                                       ${isSubmitted ? `
+                                         <span style="font-size:48px;">✅</span>
+                                         <span style="font-size:11px; font-weight:bold; color:var(--accent2); text-align:center; padding:0 8px; line-height:1.3; margin-top:8px;">ส่งข้อมูลสำเร็จแล้ว</span>
+                                       ` : (isImgStaged ? `
+                                         <img src="${stagedWaterImages[v]}" style="width:100%; height:100%; object-fit:cover; position:absolute; inset:0; z-index:1;" />
+                                       ` : `
+                                         <span style="font-size:32px; margin-bottom:6px; z-index:2;">📸</span>
+                                         <span style="font-size:11px; font-weight:bold; color:var(--accent); text-align:center; padding:0 8px; line-height:1.3; z-index:2;">กดถ่ายรูปมาตรน้ำ<br>(เปิดกล้องโทรศัพท์)</span>
+                                       `)}
+                                     </div>
+                                     <div style="font-size:11px; color:var(--text-muted); margin-top:8px; font-weight:bold; display:flex; align-items:center; gap:4px;">
+                                       🎯 ถ่ายส่วนที่เป็นหน้าปัดมาตรวัดให้เต็มจอมือถือและชัดเจนที่สุด
+                                     </div>
+                                   </div>
+                                   
+                                   <input type="file" id="water_file_${v}" accept="image/*" capture="environment" style="display:none" onchange="stageWaterImage(this, '${v}', '${t.taskId || ''}')">
+                                   
+                                   <div style="margin-top:14px; border-top:1px dashed var(--border); padding-top:12px;">
+                                     ${isSubmitted ? `
+                                       <div style="background:rgba(126, 200, 160, 0.1); color:var(--accent2); border:1px solid var(--accent2); border-radius:8px; padding:10px 12px; font-weight:bold; font-size:14px; display:flex; align-items:center; justify-content:center; gap:6px;">
+                                         ✅ ส่งข้อมูลสำเร็จแล้ว
+                                       </div>
+                                     ` : `
+                                       <button class="btn btn-primary" onclick="${isImgStaged ? `submitSingleWaterMeter('${v}', ${t.rowIdx}, '${t.taskId || ''}')` : `showToast('กรุณากดถ่ายรูปมาตรน้ำของวิลล่า ${v} ก่อนครับ', 'error')`}" style="margin-top:0; padding:10px 14px; font-size:14px; border-radius:8px; display:inline-flex; width:100%; justify-content:center; align-items:center; gap:6px; ${btnStyle} box-shadow:0 2px 6px rgba(79, 158, 255, 0.25);">
+                                         📤 ส่งบันทึกเฉพาะวิลล่า ${v}
+                                       </button>
+                                     `}
+                                   </div>
+                                 </div>`;
+                });
+                
+                formHtml += `</div>`;
+                btn = formHtml;
+            } else {
+                var stagedImgs = stagedTaskImages[t.rowIdx] || [];
+                var previewHtml = stagedImgs.length > 0 ? `<div class="task-imgs" style="margin-bottom:10px">${stagedImgs.map((b64, idx) => `<img src="${b64}" onclick="removeStagedImage(${t.rowIdx}, ${idx})" style="border-color:var(--warn)">`).join('')}</div><div style="font-size:11px; color:var(--warn); margin-bottom:10px;">* จิ้มที่รูปเพื่อลบทิ้งได้</div>` : '';
+                var addBtnText = stagedImgs.length > 0 ? "📸 ถ่ายรูปเพิ่ม" : "📸 ถ่ายรูปสถานที่จริง";
+                var submitBtn = stagedImgs.length > 0 ? `<button class="btn btn-success" style="margin-top:10px; width:100%" onclick="submitStagedTasks(${t.rowIdx}, '${t.taskId || ''}')">✅ ยืนยันส่งงาน (${stagedImgs.length} รูป)</button>` : '';
+
+                btn = `${previewHtml}
+                       <div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">${addBtnText}</div>
+                       ${submitBtn}
+                       <input type="file" id="file_${t.rowIdx}" accept="image/*" capture="environment" style="display:none" onchange="stageTaskImage(this, ${t.rowIdx})">`;
+            }
+        });">${v}</span>
                                      <span style="font-size:11px; color:var(--text-muted);">เมื่อวาน: <span style="font-family:var(--mono); color:var(--warn); font-weight:bold;">${maskedValueText}</span></span>
                                    </div>
                                    
                                    <!-- ช่องถ่ายรูปทรงวงกลมเฉพาะภารกิจนี้ตามดีไซน์ -->
                                    <div style="display:flex; flex-direction:column; align-items:center; margin:12px 0;">
-                                     <div onclick="triggerWaterFileInput('${v}', '${t.taskId || ''}')" style="width:160px; height:160px; border-radius:50%; border:3px dashed ${isImgStaged ? 'var(--accent2)' : 'var(--accent)'}; background:${isImgStaged ? 'url(' + stagedWaterImages[v] + ') no-repeat center/cover' : 'rgba(79, 158, 255, 0.05)'}; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; position:relative; overflow:hidden; transition:all 0.2s; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
-                                       ${!isImgStaged ? `
-                                         <span style="font-size:32px; margin-bottom:6px;">📸</span>
-                                         <span style="font-size:11px; font-weight:bold; color:var(--accent); text-align:center; padding:0 8px; line-height:1.3;">กดถ่ายรูปมาตรน้ำ<br>(เปิดกล้องโทรศัพท์)</span>
-                                       ` : ''}
+                                     <div onclick="triggerWaterFileInput('${v}', '${t.taskId || ''}')" style="width:160px; height:160px; border-radius:50%; border:3px dashed ${isImgStaged ? 'var(--accent2)' : 'var(--accent)'}; background:rgba(79, 158, 255, 0.05); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; position:relative; overflow:hidden; transition:all 0.2s; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
+                                       ${isImgStaged ? `
+                                         <img src="${stagedWaterImages[v]}" style="width:100%; height:100%; object-fit:cover; position:absolute; inset:0; z-index:1;" />
+                                       ` : `
+                                         <span style="font-size:32px; margin-bottom:6px; z-index:2;">📸</span>
+                                         <span style="font-size:11px; font-weight:bold; color:var(--accent); text-align:center; padding:0 8px; line-height:1.3; z-index:2;">กดถ่ายรูปมาตรน้ำ<br>(เปิดกล้องโทรศัพท์)</span>
+                                       `}
                                      </div>
                                      <div style="font-size:11px; color:var(--text-muted); margin-top:8px; font-weight:bold; display:flex; align-items:center; gap:4px;">
                                        🎯 ถ่ายส่วนที่เป็นหน้าปัดมาตรวัดให้เต็มจอมือถือและชัดเจนที่สุด
@@ -771,6 +801,76 @@
       });
     }
 
+    function submitSingleWaterMeter(villa, rowIdx, taskId) {
+      if(!currentLoc && userProfile.role !== "Observer") return showToast("รอพิกัด GPS ก่อนส่งรายงาน", "error");
+      
+      if (!stagedWaterImages[villa]) {
+        return showToast("กรุณาถ่ายรูปมาตรน้ำของวิลล่า " + villa + " ประกอบด้วยครับ", "error");
+      }
+      
+      var reading = 0; // ยามไม่ต้องกรอกตัวเลขแล้ว ให้ระบบหลังบ้าน (AI/แอดมิน) ประมวลผลจากรูปภาพ
+      var readingObj = { villa: villa, reading: reading, image: stagedWaterImages[villa] };
+      
+      if (taskId === "TEST_WATER_TASK") {
+        showLoading("กำลังจำลองการส่งบันทึกมาตรน้ำ " + villa + "...");
+        setTimeout(function() {
+          hideLoading();
+          showToast("✅ [โหมดทดสอบ] ส่งข้อมูลสำเร็จ! (ไม่บันทึกจริง)", "success");
+          if (!stagedSubmittedVillas.includes(villa)) {
+            stagedSubmittedVillas.push(villa);
+          }
+          delete stagedWaterImages[villa];
+          saveWaterDraft(taskId);
+          renderTasks();
+        }, 1200);
+        return;
+      }
+
+      showLoading("กำลังส่งบันทึกมาตรน้ำวิลล่า " + villa + "...");
+      apiCall({
+        type: 'submit_water',
+        rowIdx: rowIdx,
+        taskId: taskId,
+        lat: currentLoc?.lat,
+        lng: currentLoc?.lng,
+        readings: [readingObj],
+        fullName: userProfile.fullName,
+        role: userProfile.role || "Guard"
+      }).then(res => {
+        hideLoading();
+        showToast(res.message, res.success ? "success" : "error");
+        if(res.success) {
+          if (!stagedSubmittedVillas.includes(villa)) {
+            stagedSubmittedVillas.push(villa);
+          }
+          delete stagedWaterImages[villa];
+          saveWaterDraft(taskId);
+          
+          showLoading("กำลังอัปเดตสถานะภารกิจ...");
+          apiCall({ type: 'get_tasks', lat: currentLoc?.lat, lng: currentLoc?.lng, role: userProfile.role || "Guard" }).then(tasksRes => {
+            hideLoading();
+            if (tasksRes.success) {
+              currentTasks = tasksRes.tasks;
+              var tIdx = currentTasks.findIndex(t => t.taskId === taskId || t.rowIdx === rowIdx);
+              if (tIdx !== -1 && currentTasks[tIdx].status === 'Completed') {
+                localStorage.removeItem('water_readings_draft');
+                stagedWaterImages = {};
+                waterMeterRetries = {};
+                aiReadingsState = {};
+                stagedSubmittedVillas = [];
+                showToast("🎉 บันทึกค่าน้ำครบถ้วนทุกวิลล่าเรียบร้อยแล้ว!", "success");
+                openTaskpool();
+              } else {
+                renderTasks();
+              }
+            } else {
+              renderTasks();
+            }
+          });
+        }
+      });
+    }
+
     function stageWaterImage(input, villa, taskId) {
       if(!input.files.length) return;
       activeCameraVilla = villa;
@@ -813,13 +913,13 @@
       r.onload = e => {
         var img = new Image();
         img.onload = function() {
-          var MAX_W  = 1600; // ตั้งค่าความละเอียดสูง 1600px เพื่อให้ผู้ดูแลระบบสามารถซูมอ่านรายละเอียดหน้าปัดน้ำได้ชัดเจน
+          var MAX_W  = 1600; // เอาคุณภาพเต็มๆ สำหรับส่งค่าน้ำทีละหลัง
           var scale  = Math.min(1, MAX_W / img.width);
           var canvas = document.createElement('canvas');
           canvas.width  = Math.round(img.width  * scale);
           canvas.height = Math.round(img.height * scale);
           canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          var b64 = canvas.toDataURL('image/jpeg', 0.85); // บีบอัดระดับ 85% เพื่อความคมชัดสูงสำหรับซูมตรวจจับไอน้ำ
+          var b64 = canvas.toDataURL('image/jpeg', 0.85); // บีบอัดระดับ 85% คุณภาพเต็มตาตามรีเควส
 
           stagedWaterImages[villa] = b64;
           saveWaterDraft(activeCameraTaskId); // Save photo state!
@@ -850,62 +950,7 @@
       }
     }
 
-    function runAIProcess(b64, villa) {
-      showLoading("🤖 AI กำลังอ่านหน้าปัด โปรดยืนรอสักครู่เผื่อต้องถ่ายรูปซ่อม...");
-      apiCall({
-        type: 'process_water_image_ai',
-        villa: villa,
-        image: b64
-      }).then(res => {
-        hideLoading();
-        if (res.success && res.aiSuccess) {
-          aiReadingsState[villa] = {
-            success: true,
-            value: res.value,
-            reason: null
-          };
-          var roundedVal = Math.floor(res.value);
-          document.getElementById("water_int_" + villa).value = roundedVal;
-          saveWaterDraft(activeCameraTaskId); // เซฟแบบร่าง
-          showToast("🤖 AI อ่านสำเร็จ: " + res.value.toFixed(2), "success");
-        } else {
-          var reasonStr = res.reason || res.message || "ภาพไม่ชัดเจน/มีสิ่งกีดขวาง";
-          aiReadingsState[villa] = {
-            success: false,
-            value: null,
-            reason: reasonStr
-          };
-          
-          if (!waterMeterRetries[villa]) waterMeterRetries[villa] = 0;
-          waterMeterRetries[villa]++;
-          
-          saveWaterDraft(activeCameraTaskId); // เซฟแบบร่าง
-          
-          if (waterMeterRetries[villa] > 1) {
-            showToast("⚠️ AI ยังคงอ่านไม่ได้หลังถ่ายซ่อม: " + reasonStr + " (ระบบจะบันทึกค่าน้ำทศนิยม .00 ให้อัตโนมัติ)", "warn");
-          } else {
-            showToast("❌ AI อ่านไม่ได้เนื่องจาก: " + reasonStr + "\n💡 เคล็ดลับ: ใช้นิ้วเคาะกระจกมาตรน้ำเบาๆ เพื่อให้ไอน้ำขยับตำแหน่งหรือไหลออก แล้วกด 'ถ่ายซ่อม' อีกครั้งครับ", "error");
-          }
-        }
-        renderTasks();
-      }).catch(err => {
-        hideLoading();
-        showToast("ไม่สามารถประมวลผลด้วย AI ได้ชั่วคราว ❌", "error");
-        renderTasks();
-      });
-    }
-
     function saveWaterDraft(taskId) {
-      var villas = ["V1", "V2", "V3", "V5", "V6", "V7", "V8"];
-      var readings = {};
-      villas.forEach(function(v) {
-        var intEl = document.getElementById("water_int_" + v);
-        if (intEl) {
-          readings[v] = {
-            int: intEl.value
-          };
-        }
-      });
       try {
         var existingStr = localStorage.getItem('water_readings_draft');
         var tid = taskId;
@@ -916,7 +961,7 @@
         }
         localStorage.setItem('water_readings_draft', JSON.stringify({
           taskId: tid,
-          readings: readings,
+          readings: {},
           stagedWaterImages: stagedWaterImages,
           waterMeterRetries: waterMeterRetries,
           aiReadingsState: aiReadingsState
