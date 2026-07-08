@@ -567,51 +567,6 @@
                        ${submitBtn}
                        <input type="file" id="file_${t.rowIdx}" accept="image/*" capture="environment" style="display:none" onchange="stageTaskImage(this, ${t.rowIdx})">`;
             }
-        });">${v}</span>
-                                     <span style="font-size:11px; color:var(--text-muted);">เมื่อวาน: <span style="font-family:var(--mono); color:var(--warn); font-weight:bold;">${maskedValueText}</span></span>
-                                   </div>
-                                   
-                                   <!-- ช่องถ่ายรูปทรงวงกลมเฉพาะภารกิจนี้ตามดีไซน์ -->
-                                   <div style="display:flex; flex-direction:column; align-items:center; margin:12px 0;">
-                                     <div onclick="triggerWaterFileInput('${v}', '${t.taskId || ''}')" style="width:160px; height:160px; border-radius:50%; border:3px dashed ${isImgStaged ? 'var(--accent2)' : 'var(--accent)'}; background:rgba(79, 158, 255, 0.05); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; position:relative; overflow:hidden; transition:all 0.2s; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
-                                       ${isImgStaged ? `
-                                         <img src="${stagedWaterImages[v]}" style="width:100%; height:100%; object-fit:cover; position:absolute; inset:0; z-index:1;" />
-                                       ` : `
-                                         <span style="font-size:32px; margin-bottom:6px; z-index:2;">📸</span>
-                                         <span style="font-size:11px; font-weight:bold; color:var(--accent); text-align:center; padding:0 8px; line-height:1.3; z-index:2;">กดถ่ายรูปมาตรน้ำ<br>(เปิดกล้องโทรศัพท์)</span>
-                                       `}
-                                     </div>
-                                     <div style="font-size:11px; color:var(--text-muted); margin-top:8px; font-weight:bold; display:flex; align-items:center; gap:4px;">
-                                       🎯 ถ่ายส่วนที่เป็นหน้าปัดมาตรวัดให้เต็มจอมือถือและชัดเจนที่สุด
-                                     </div>
-                                   </div>
-                                   
-                                   <input type="file" id="water_file_${v}" accept="image/*" capture="environment" style="display:none" onchange="stageWaterImage(this, '${v}', '${t.taskId || ''}')">
-                                   
-                                   <div style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:14px;">
-                                     <span style="font-size:13px; font-weight:bold;">ระบุเลขดำ 4 หลัก:</span>
-                                     <input type="number" id="water_int_${v}" value="${valInt}" placeholder="${isImgStaged ? '4 หลัก' : 'ถ่ายรูปก่อน'}" oninput="if(this.value.length > 4) this.value = this.value.slice(0, 4); saveWaterDraft('${t.taskId || ''}');" style="width:90px; text-align:center; margin-bottom:0; padding:8px; font-weight:bold; font-size:16px; border:1px solid var(--border); border-radius:8px; ${!isImgStaged ? 'background-color: var(--surface2); opacity: 0.6; cursor: not-allowed;' : 'background:var(--surface2); color:var(--text);'}" min="0" max="9999" ${!isImgStaged ? 'disabled' : ''}>
-                                   </div>
-                                   
-                                   <div style="margin-top:8px; min-height:16px;">
-                                     ${aiStatusHtml}
-                                   </div>
-                                 </div>`;
-                });
-                
-                formHtml += `<button class="btn btn-success" style="margin-top:8px; width:100%;" onclick="submitWaterMeter(${t.rowIdx}, '${t.taskId || ''}')">✅ ส่งข้อมูลและคํานวณยอดน้ำ</button></div>`;
-                btn = formHtml;
-            } else {
-                var stagedImgs = stagedTaskImages[t.rowIdx] || [];
-                var previewHtml = stagedImgs.length > 0 ? `<div class="task-imgs" style="margin-bottom:10px">${stagedImgs.map((b64, idx) => `<img src="${b64}" onclick="removeStagedImage(${t.rowIdx}, ${idx})" style="border-color:var(--warn)">`).join('')}</div><div style="font-size:11px; color:var(--warn); margin-bottom:10px;">* จิ้มที่รูปเพื่อลบทิ้งได้</div>` : '';
-                var addBtnText = stagedImgs.length > 0 ? "📸 ถ่ายรูปเพิ่ม" : "📸 ถ่ายรูปสถานที่จริง";
-                var submitBtn = stagedImgs.length > 0 ? `<button class="btn btn-success" style="margin-top:10px; width:100%" onclick="submitStagedTasks(${t.rowIdx}, '${t.taskId || ''}')">✅ ยืนยันส่งงาน (${stagedImgs.length} รูป)</button>` : '';
-
-                btn = `${previewHtml}
-                       <div class="upload-btn" onclick="document.getElementById('file_${t.rowIdx}').click()">${addBtnText}</div>
-                       ${submitBtn}
-                       <input type="file" id="file_${t.rowIdx}" accept="image/*" capture="environment" style="display:none" onchange="stageTaskImage(this, ${t.rowIdx})">`;
-            }
         }
 
         var imgs = t.images && t.images.length ? `<div class="task-imgs">${t.images.map(url => `<img src="${url}" onclick="window.open('${url.replace('s200','s1600')}')">`).join('')}</div>` : '';
