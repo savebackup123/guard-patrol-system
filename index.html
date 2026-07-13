@@ -857,7 +857,7 @@
 
     function processWaterImageFile(file, villa, takenDate) {
       var diffMinutes  = Math.abs(new Date() - takenDate) / (1000 * 60);
-      if (diffMinutes > 5) {
+      if (diffMinutes > 60) {
         hideLoading(); 
         showToast("รูปภาพเก่าเกินไป (" + Math.floor(diffMinutes) + " นาทีที่แล้ว) ถ่ายใหม่ ❌", "error");
         document.getElementById('water_file_' + villa).value = "";
@@ -868,7 +868,7 @@
       r.onload = e => {
         var img = new Image();
         img.onload = function() {
-          var MAX_W  = 1600; // เอาคุณภาพเต็มๆ สำหรับส่งค่าน้ำทีละหลัง
+          var MAX_W  = 1600; // เอาคุณภาพเต็มๆ สำหรับส่งค่าน้ำทีละหลังตามรีเควส
           var scale  = Math.min(1, MAX_W / img.width);
           var canvas = document.createElement('canvas');
           canvas.width  = Math.round(img.width  * scale);
